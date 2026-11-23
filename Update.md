@@ -6,6 +6,28 @@
 
 ---
 
+## [1.3.1] - 2026-11-23
+
+### 伴随服务加固载荷字节码校验修复（VerifyError 消除与预热对齐）
+
+- **背景**：
+  在配置预热（`prewarmCompanionJars`）加固类站源（如 `csp_WexAiDuBoKuGuard`、`csp_WexAiGuaZiGuard` 等）时，伴随微服务出现加载未完成警告并连续触发两次重试报警。经分析 `companion.log`，根本原因为运行期 Release 目录下的伴随服务微服务包（`companion-service.jar`）使用了旧版 `-jvm9` 产物，未针对 Java 21 严格字节码校验模式执行 ASM 栈帧重建（`ClassWriter.COMPUTE_FRAMES`）；当 JVM 加载 `InitOrigin.checkPermission()V` 时因跳转分支缺少 StackMapTable 而抛出 `java.lang.VerifyError: Expecting a stackmap frame at branch target 44`，引发爬虫加载退回 `SpiderNull`。
+- **改动**：
+  1. **伴随微服务全量源码重编**：执行 `companion/build.ps1` 编译包含最新 `android-bridge` 内核与 `JvmVerificationRepair` 的自包含服务包（40.3 MB），确保加固 DEX 还原产物自动完成真实分配类型构造调用修复及 StackMapTable 帧重建。
+  2. **发布环境运行时对齐**：同步正式 `companion-service.jar` 至 Release 运行目录，补全加固运行依赖（`lib-unidbg`、`bcprov` 及多语言脚本运行时）。
+  3. **过期缓存自动失效净化**：启动时由 `purgeObsoleteArtifacts` 自动清理本地残留的 `-jvm9` 作废缓存，平滑迁移至已校验的 `-if52-jvm13.jar`。
+- **验证**：
+  - 微服务 RPC 独立载入测试：对 `WexAiDuBoKuGuard`、`WexAiGuaZiGuard` 分别发起 `/spider/load` 调用，均成功执行 `InitOrigin.init(Application)` 并返回 `{"code":0,"msg":"loaded"}`，`VerifyError` 彻底消除；
+  - 实机启动烟测：运行 Release 版本 `xiugou_tv.exe`，伴随服务就绪且预热顺利完成，运行日志 0 处 `加载未完成`；
+  - 核心单测：`flutter test` 27/27 测试全数 PASS；
+  - 静态检查：`flutter analyze` 0 error，保持原有 29 条基线提示；
+  - 版本号三处强一致同步：`pubspec.yaml`、`installer.iss` 与 `README.md` 均严格对齐为 `1.3.1`；
+  - `lib/app.dart` 全程保持未变动。
+- **已知边界（或回滚方式）**：
+  - 载荷本地缓存存放于 `~/.xiugou_tv_companion/jars`，若需强制重新解密还原可安全清空该目录。
+
+---
+
 ## [1.3.0] - 2026-11-23
 
 ### HLS 插播广告剪辑（点播广告整段剔除与本地代理）
