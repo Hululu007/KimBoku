@@ -2,8 +2,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'ad_filter_debug.dart';
 import 'decode_diagnostics.dart';
 import 'embedded_playback.dart';
+import 'hls_ad_filter.dart';
+import 'hls_ad_proxy.dart';
 import 'live_stream_tuning.dart';
 import 'local_subtitle_files.dart';
 import 'models/player_settings.dart';
@@ -58,6 +61,9 @@ class MpvPlayerEngine
   late final VideoController _videoController;
 
   final _embeddedTexture = ValueNotifier<EmbeddedPlaybackSession?>(null);
+  final HlsAdFilterProxy _adFilter = HlsAdFilterProxy();
+  final ValueNotifier<AdFilterDebugInfo?> _adFilterDebug =
+      ValueNotifier<AdFilterDebugInfo?>(null);
   _EmbeddedRoute? _route;
   Future<Duration?>? _embeddedClosing;
   Duration? _parkedPosition;
@@ -65,6 +71,9 @@ class MpvPlayerEngine
   VideoDimensions _parkedDimensions = const VideoDimensions();
 
   ValueListenable<EmbeddedPlaybackSession?> get embeddedSession => _embeddedTexture;
+
+  @override
+  ValueListenable<AdFilterDebugInfo?> get adFilterDebug => _adFilterDebug;
 
   Future<bool> selectPlaybackBackend(NativePlaybackBackend? backend,
       {EmbeddedPlaybackChannel channel = const EmbeddedPlaybackChannel()}) =>
@@ -660,15 +669,20 @@ class MpvPlayerEngine
       }
       await _applySessionStreamProperties(spec.isLive, epoch);
       if (!_isCurrentSession(epoch) || openEpoch != _openEpoch) return;
-      await _applyPlaybackProxy(spec.url);
+      // 先决定「最终交给 mpv 的地址」，再按这个地址配代理：
+      // 换成回环地址时必须把 http-proxy 清空（否则 mpv 会把 127.0.0.1 也塞进系统代理）。
+      final filtered = await _resolveAdFilteredUrl(spec);
+      if (!_isCurrentSession(epoch) || openEpoch != _openEpoch) return;
+      await _applyPlaybackProxy(filtered.url);
       if (!_isCurrentSession(epoch) || openEpoch != _openEpoch) return;
       final media = Media(
-        spec.url,
+        filtered.url,
         // 站点没给 UA/Referer 时补浏览器默认值（有些源按 UA 拦非浏览器请求）。
+        // 这里用**原始**地址判断：分片由播放器直连 CDN，Referer 必须是源站的。
         httpHeaders: withBrowserHeaderFallbacks(spec.headers, spec.url,
             enabled: playbackSettings.browserHeaders),
         // 直播是实时流，带起播位置会让 mpv 尝试 seek 到不存在的时间点。
-        start: spec.isLive ? null : spec.startPosition,
+        start: spec.isLive ? null : filtered.start,
       );
       openedUri = media.uri;
       _openedMediaUri = openedUri;
@@ -748,6 +762,97 @@ class MpvPlayerEngine
           microseconds: (position * Duration.microsecondsPerSecond).round()));
     } catch (error) {
       if (isCurrent()) _recentLogs.add('[source-evidence] $error');
+    }
+  }
+
+  /// 点播起播前过滤插播广告（§AD）。
+  ///
+  /// 返回「经过本地代理的剪后播放列表地址」与「换算后的起播位置」；
+  /// 遇到不支持、关闭、直播、无广告、分析失败、系统代理等情况，
+  /// 一律原样返回——**过滤永远不能挡住起播**。结论同时写进诊断日志与
+  /// [adFilterDebug]（播放器「广告调试」面板按 D 键可看）。
+  ///
+  /// 顺带把续播点换算到剪后的时间轴：剪掉的是广告，用户上次看到的位置不该跟着前移。
+  Future<({String url, Duration? start})> _resolveAdFilteredUrl(
+      MediaPlaySpec spec) async {
+    final fallback = (url: spec.url, start: spec.startPosition);
+    final uri = Uri.tryParse(spec.url);
+    final sourceHost = uri?.host ?? '';
+
+    void report(AdFilterOutcome outcome,
+        {String? reason,
+        HlsAdFilterAttempt? attempt,
+        Duration? shiftedStart}) {
+      final result = attempt?.result;
+      _adFilterDebug.value = AdFilterDebugInfo(
+        outcome: outcome,
+        reason: reason ?? attempt?.reason,
+        title: spec.title,
+        sourceHost: sourceHost,
+        proxyHost: result == null ? '' : '127.0.0.1',
+        cutCount: result?.cutCount ?? 0,
+        removedSeconds: result?.removedSeconds ?? 0,
+        sourceDuration: result?.analysis?.duration ?? 0,
+        filteredDuration: result?.analysis?.mainDuration ?? 0,
+        blocks: result?.analysis?.blocks ?? const [],
+        cuts: result?.cuts ?? const [],
+        fromMaster: result?.fromMaster ?? false,
+        shiftedStart: shiftedStart,
+        at: DateTime.now(),
+      );
+    }
+
+    if (!playbackSettings.adFilterEnabled) {
+      report(AdFilterOutcome.disabled);
+      return fallback;
+    }
+    if (spec.isLive) {
+      report(AdFilterOutcome.live);
+      return fallback;
+    }
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      report(AdFilterOutcome.notHls, reason: '本地文件或非 http 地址');
+      return fallback;
+    }
+    final path = uri.path.toLowerCase();
+    if (!path.endsWith('.m3u8') && !path.endsWith('.m3u')) {
+      report(AdFilterOutcome.notHls, reason: '地址不以 .m3u8 / .m3u 结尾');
+      return fallback;
+    }
+    // 配了系统代理时不动：mpv 只有全局 http-proxy，换成回环地址后分片会被
+    // 一起塞进代理（代理在别的机器上解析 127.0.0.1），等于把能播的源搞坏。
+    final systemProxy = DanmakuApi.systemProxy();
+    if (systemProxy != null && systemProxy.isNotEmpty) {
+      report(AdFilterOutcome.systemProxy,
+          reason: 'mpv 只有全局 http-proxy，本地清单会被代理转发');
+      _recentLogs.add('[ad-filter] 已配置系统代理，跳过剪辑（本地列表会被代理转发）');
+      return fallback;
+    }
+
+    final headers = withBrowserHeaderFallbacks(spec.headers, spec.url,
+            enabled: playbackSettings.browserHeaders) ??
+        const <String, String>{};
+    try {
+      final attempt = await _adFilter
+          .filter(spec.url, headers)
+          .timeout(const Duration(seconds: 8));
+      final shifted = attempt.result == null
+          ? null
+          : shiftStartAfterCut(spec.startPosition, attempt.result!.cuts);
+      report(attempt.outcome, attempt: attempt, shiftedStart: shifted);
+      if (attempt.url == null) {
+        _recentLogs.add('[ad-filter] ${attempt.outcome.label}'
+            '${attempt.reason == null ? '' : '：${attempt.reason}'}，按原地址播放');
+        return fallback;
+      }
+      _recentLogs.add('[ad-filter] 已剪辑 ${attempt.result!.cutCount} 段插播广告，'
+          '共 ${attempt.result!.removedSeconds.toStringAsFixed(1)} 秒'
+          '${attempt.result!.fromMaster ? '（多码率主列表，按播放器选中的码率裁剪）' : ''}');
+      return (url: attempt.url!, start: shifted ?? spec.startPosition);
+    } catch (error) {
+      report(AdFilterOutcome.unavailable, reason: '$error');
+      _recentLogs.add('[ad-filter] 过滤失败，按原地址播放：$error');
+      return fallback;
     }
   }
 
@@ -893,6 +998,7 @@ class MpvPlayerEngine
     _cancelErrorConfirm();
     cancelSeekRecovery();
     _currentSpec = null;
+    _adFilterDebug.value = null;
     _pauseIntent = false;
     _externalPlaybackPaused = false;
     _openingMedia = false;
@@ -1283,6 +1389,8 @@ class MpvPlayerEngine
     await _audioTracksController.close();
     await _subtitleTracksController.close();
     await _videoTracksController.close();
+    await _adFilter.shutdown();
+    _adFilterDebug.dispose();
   }
 
   // --- 快照属性 ---
