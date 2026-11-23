@@ -4,6 +4,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import '../../../core/app_info.dart';
 import '../../../core/config/config_repository.dart';
 import '../../../core/config/config_source_switcher.dart';
 import 'package:dio/dio.dart' show DioException;
@@ -4379,8 +4380,8 @@ class _DataBackupCardState extends State<_DataBackupCard> {
     if (pick != null) return pick(suggestedName);
     final location = await getSaveLocation(
       suggestedName: suggestedName,
-      acceptedTypeGroups: const [
-        XTypeGroup(label: 'KimBoKu 数据备份', extensions: ['json']),
+      acceptedTypeGroups: [
+        XTypeGroup(label: '$appDisplayName 数据备份', extensions: const ['json']),
       ],
     );
     return location?.path;
@@ -4390,8 +4391,8 @@ class _DataBackupCardState extends State<_DataBackupCard> {
     final pick = widget.pickOpenPath;
     if (pick != null) return pick();
     final file = await openFile(
-      acceptedTypeGroups: const [
-        XTypeGroup(label: 'KimBoKu 数据备份', extensions: ['json']),
+      acceptedTypeGroups: [
+        XTypeGroup(label: '$appDisplayName 数据备份', extensions: const ['json']),
       ],
     );
     return file?.path;
@@ -5055,8 +5056,8 @@ class AboutPanel extends StatefulWidget {
     this.errorLog,
   });
 
-  static const String sourceCodeUrl = 'https://github.com/qfw66/xiugou-tv';
-  static const String issuesUrl = 'https://github.com/qfw66/xiugou-tv/issues';
+  static const String sourceCodeUrl = 'https://github.com/jacurtwong/KimBoku';
+  static const String issuesUrl = 'https://github.com/jacurtwong/KimBoku/issues';
 
   @override
   State<AboutPanel> createState() => _AboutPanelState();
@@ -5133,7 +5134,7 @@ class _AboutPanelState extends State<AboutPanel> {
             style: TextStyle(
                 color: context.palette.textTitle, fontSize: AppType.heading)),
         content: Text(
-          '将清空 KimBoKu 的全部数据并恢复到刚安装的状态：所有设置、播放历史、收藏、配置源、直播源、'
+          '将清空 $appDisplayName 的全部数据并恢复到刚安装的状态：所有设置、播放历史、收藏、配置源、直播源、'
           '片头片尾记录、壁纸、本地备份与缓存，以及各站源里的网盘登录状态（需重新扫码）都会被删除，且无法恢复。\n应用随后自动重启。是否继续？',
           style: TextStyle(
               color: context.palette.textBody,
@@ -5205,7 +5206,7 @@ class _AboutPanelState extends State<AboutPanel> {
                     width: 88, height: 88, filterQuality: FilterQuality.high),
               ),
               const SizedBox(height: 14),
-              Text('KimBoKu',
+              Text(appDisplayName,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                       fontSize: AppType.h2,

@@ -40,7 +40,15 @@ abstract final class BuildInfo {
       final hash = '${r.stdout}'.trim();
       if (hash.isEmpty) return null;
       final dirty = Process.runSync('git', ['status', '--porcelain', '--untracked-files=no']);
-      return '${dirty.stdout}'.trim().isEmpty ? hash : '$hash-dirty';
+      if (dirty.exitCode != 0) return hash;
+      final dirtyLines = '${dirty.stdout}'
+          .split('\n')
+          .map((line) => line.trim())
+          .where((line) => line.isNotEmpty)
+          .where((line) =>
+              !line.contains('windows/flutter/generated_plugin_registrant.') &&
+              !line.contains('windows/flutter/generated_plugins.cmake'));
+      return dirtyLines.isEmpty ? hash : '$hash-dirty';
     } catch (_) {
       return null;
     }

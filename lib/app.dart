@@ -3415,14 +3415,36 @@ class _UpdateDialogHost extends ConsumerWidget {
 }
 
 /// 关于页的更新行：把状态与动作接到纯展示的 [AboutUpdateSection]。
-class AboutUpdateSectionHost extends ConsumerWidget {
+class AboutUpdateSectionHost extends ConsumerStatefulWidget {
   const AboutUpdateSectionHost({super.key, this.between});
 
   /// 插在「当前版本」与「自动检查」之间（关于页的构建信息）
   final Widget? between;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AboutUpdateSectionHost> createState() =>
+      _AboutUpdateSectionHostState();
+}
+
+class _AboutUpdateSectionHostState
+    extends ConsumerState<AboutUpdateSectionHost> {
+  static bool _autoCheckedOnOpen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!_autoCheckedOnOpen) {
+      _autoCheckedOnOpen = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final controller = ref.read(updateControllerProvider.notifier);
+        unawaited(controller.check());
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final prefs = ref.watch(updatePreferencesProvider);
     final state = ref.watch(updateControllerProvider);
     final controller = ref.read(updateControllerProvider.notifier);
@@ -3450,7 +3472,7 @@ class AboutUpdateSectionHost extends ConsumerWidget {
                 ),
               );
             },
-      between: between,
+      between: widget.between,
     );
   }
 }
@@ -3508,6 +3530,11 @@ class _UpdateCheckHostState extends ConsumerState<UpdateCheckHost> {
 
   Future<void> _run() async {
     if (_ran || !mounted) return;
+    final notifier = ref.read(updatePreferencesProvider.notifier);
+    try {
+      await notifier.load().timeout(const Duration(seconds: 3));
+    } catch (_) {}
+    if (!mounted) return;
     _ran = true;
     if (!ref.read(updatePreferencesProvider).autoCheck) return;
 
@@ -3812,7 +3839,7 @@ class XiugouTvApp extends ConsumerWidget {
         isRealMpvEngine ? buildPlayerTrackNavs(playerEngine) : null;
 
     return MaterialApp(
-      title: 'KimBoKu',
+      title: appDisplayName,
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(
           brightness: Brightness.light, palette: AppPalette.light),
@@ -6688,7 +6715,7 @@ class _DesktopMainViewState extends ConsumerState<DesktopMainView> {
               ),
               const SizedBox(height: 18),
               Text(
-                'KimBoKu',
+                appDisplayName,
                 style: TextStyle(
                   fontSize: AppType.h1,
                   fontWeight: FontWeight.bold,

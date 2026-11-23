@@ -9,11 +9,11 @@ import 'update_preferences.dart';
 
 /// 官方更新源（公开仓库，Releases API 无需鉴权）。
 const String officialUpdateSourceUrl =
-    'https://api.github.com/repos/qfw66/xiugou-tv/releases/latest';
+    'https://api.github.com/repos/jacurtwong/KimBoku/releases/latest';
 
 /// 发布页（无安装版资产 / 便携版时引导用户手动下载）。
 const String releasePageUrl =
-    'https://github.com/qfw66/xiugou-tv/releases/latest';
+    'https://github.com/jacurtwong/KimBoku/releases/latest';
 
 enum UpdateCheckStatus {
   upToDate,

@@ -10,20 +10,30 @@ import 'update_preferences_store.dart';
 /// 这样旧写入不会覆盖已确认的镜像配置，失败配置也不会混入后续开关写入。
 class UpdatePreferencesNotifier extends StateNotifier<UpdatePreferences> {
   final UpdatePreferencesStore _store;
-  bool _loading = false;
+  bool _loaded = false;
   bool _dirty = false;
+  Future<void>? _loadFuture;
   Future<void> _writes = Future<void>.value();
 
   UpdatePreferencesNotifier(this._store) : super(UpdatePreferences.defaults);
 
-  /// 读取磁盘偏好；只会发生一次（首帧后由关于页或启动检查触发）。
-  Future<void> load() async {
-    if (_loading) return;
-    _loading = true;
-    final loaded = await _store.read();
-    // 用户在读取完成前已经改过偏好：以内存为准，避免被旧文件覆盖。
-    if (!mounted || _dirty) return;
-    state = loaded;
+  /// 偏好是否已完成从磁盘读取。
+  bool get isLoaded => _loaded;
+
+  /// 读取磁盘偏好；只会真正执行一次（首帧后由关于页或启动检查触发）。
+  Future<void> load() {
+    return _loadFuture ??= _doLoad();
+  }
+
+  Future<void> _doLoad() async {
+    try {
+      final loaded = await _store.read();
+      // 用户在读取完成前已经改过偏好：以内存为准，避免被旧文件覆盖。
+      if (!mounted || _dirty) return;
+      state = loaded;
+    } finally {
+      _loaded = true;
+    }
   }
 
   Future<void> setAutoCheck(bool value) =>

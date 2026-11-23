@@ -1,6 +1,6 @@
 ﻿; Script generated for XiugouTV Windows x64 Installer
 #ifndef AppVersion
-  #define AppVersion "1.4.1"
+  #define AppVersion "1.4.2"
 #endif
 #ifndef SourceDir
   #error SourceDir must be the clean application stage created by scripts/package_tree.ps1
@@ -20,9 +20,9 @@ AppVersion={#AppVersion}
 VersionInfoVersion={#AppVersion}
 VersionInfoProductVersion={#AppVersion}
 AppPublisher=KimBoKu Project
-AppPublisherURL=https://github.com/qfw66/xiugou-tv
-AppSupportURL=https://github.com/qfw66/xiugou-tv
-AppUpdatesURL=https://github.com/qfw66/xiugou-tv
+AppPublisherURL=https://github.com/jacurtwong/KimBoku
+AppSupportURL=https://github.com/jacurtwong/KimBoku
+AppUpdatesURL=https://github.com/jacurtwong/KimBoku
 DefaultDirName={autopf}\KimBoKu
 DefaultGroupName=KimBoKu
 DisableProgramGroupPage=yes

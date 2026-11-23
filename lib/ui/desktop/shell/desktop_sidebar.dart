@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/app_info.dart';
 import '../../theme/app_icon_assets.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_tokens.dart';
@@ -70,7 +71,7 @@ class DesktopSidebar extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'KimBoKu',
+                  appDisplayName,
                   style: TextStyle(
                     fontSize: AppType.caption,
                     fontWeight: FontWeight.bold,

@@ -1,148 +1,141 @@
 # KimBoKu（金播库）
 
-一款面向 Windows 的桌面影视聚合播放客户端。
-
 <p align="center">
-  <img src="assets/icons/kimboku_banner.png" width="720" alt="KimBoKu 品牌标识">
+  <img src="assets/icons/kimboku_banner.png" width="760" alt="KimBoKu 品牌标识">
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/平台-Windows%2010%2F11%20x64-0078D4" alt="平台">
-  <img src="https://img.shields.io/badge/版本-1.4.1-2ea44f" alt="版本">
-  <img src="https://img.shields.io/badge/许可证-GPL--3.0-blue" alt="许可证">
-  <a href="https://linux.do" target="_blank">
-    <img src="https://img.shields.io/badge/社区-LINUXDO-blue" alt="社区">
-  </a>
-  <a href="https://t.me/+Z-8NGECyhdkzMDVl" target="_blank">
-    <img src="https://img.shields.io/badge/TG群组-点击加入-blue" alt="TG">
-  </a>
+  <a href="https://github.com/jacurtwong/KimBoku/releases/latest"><img src="https://img.shields.io/badge/平台-Windows%2010%2F11%20x64-0078D4?logo=windows" alt="平台"></a>
+  <a href="https://github.com/jacurtwong/KimBoku/releases/latest"><img src="https://img.shields.io/badge/版本-1.4.2-2ea44f" alt="版本"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/许可证-GPL--3.0-blue" alt="许可证"></a>
+  <a href="https://github.com/jacurtwong/KimBoku/releases/latest"><img src="https://img.shields.io/github/downloads/jacurtwong/KimBoku/total?color=blueviolet" alt="下载统计"></a>
 </p>
 
+---
 
-## 简介
+## 💡 简介
 
-KimBoKu（金播库）是一款运行在 Windows 10/11 x64 上的桌面影视客户端。导入你自己的影视配置后，就可以在同一套界面里浏览分类、搜索剧集、选集播放，并随时切换到电视直播。
+**KimBoKu（金播库）** 是一款面向 Windows 10/11 x64 桌面生态深度定制的高性能视听聚合客户端。
 
-播放内核基于 libmpv（media_kit），提供硬件解码、多轨切换、倍速与断点续播。解析层内置 JVM 运行时，可直接运行既有生态的 spider 插件，因此你现有的站点配置基本可以原样复用。
+项目融合原生 Direct3D 11 硬件加速解码与独立 JVM 伴随运行时，打造丝滑无损、零冗余的多源流媒体播放体验。导入你自有的影视配置源后，即可在统一优雅的现代桌面界面中完成全站搜片、分类浏览、分集播放与电视直播。
 
-软件本身不提供任何内容源，播放内容来自你自行添加的配置。
+> **免责声明**：本软件为纯播放器与客户端工具，本身不提供、不存储、不分发任何音视频资源或配置。所有流媒体内容均由使用者自行添加的配置源解析呈现。
 
-## 核心亮点
+---
 
-- 点播与直播共用一套界面：分类浏览、全局搜索、选集播放、频道切换与 EPG 节目单。
-- libmpv 播放内核：D3D11VA / DXVA2 硬件解码，0.5–3.0 倍速，音轨 / 视轨 / 字幕轨切换。
-- 直接复用既有影视配置与 spider 插件，无需迁移内容源。
-- 播放失败自动换线，也可手动切线路；片头片尾可按时长跳过。
-- 历史、收藏与各项偏好支持一键备份与恢复。
+## ⚡ 核心亮点
 
-## 功能特性
+- 🎬 **原生双核架构**：基于 Flutter 现代交互引擎 + libmpv（media_kit）底层驱动，支持 D3D11VA 与 DXVA2 硬件解码，4K/HDR 播放低功耗无卡顿。
+- 🛡️ **HLS 智能广告无感剪辑**：内置本地回环清单过滤代理与切片算法，点播时智能分析识别 `#EXT-X-DISCONTINUITY` 插播广告分片并在播放前无损剪除，直连 CDN 片源。
+- 📊 **透明可观测浮层**：
+  - **快捷键 `D`**：即时唤出「广告剪辑诊断面板」，清晰查看切片判断逻辑、剪前/剪后时长及各分段明细。
+  - **快捷键 `I`**：即时唤出「播放信息 OSD」，实时监控左上角真实视频分辨率、右上角系统时间、左下角进度与右下角底层瞬时下载速度与缓冲秒数。
+  - 浮层完全采用鼠标穿透（`IgnorePointer`），不拦截点击、不抢占焦点、不影响全屏与退出。
+- 🧩 **全生态影视配置兼容**：遵循开放解析层规范，直接兼容 Tvbox / CatVod spider 插件（JAR/Java、Node、Python、道长 T3/T4），现存配置源直接开箱复用。
+- 📺 **点播与直播一体化**：全网聚合搜索多线路聚合筛选、海报墙智能瀑布流、电视直播频道分组、EPG 电子节目单及播放区滚轮切台。
+- 🎛️ **专业桌面级控制**：音轨/视轨/字幕轨毫秒级切换，外挂 SRT / ASS / SSA / VTT 字幕及等比字号缩放，0.5x~3.0x 任意倍速，毫秒级片头片尾自动跳过。
+- 🔒 **独立自建与安全**：所有配置、播放记录与历史数据严格保存在本地；更新系统彻底独立脱钩，纯净无第三方遥测。
 
-### 内容源与配置
+---
 
-- 支持Tvbox影视配置 JSON、多仓清单与 CMS 资源站清单导入，多仓可指定具体仓库。
-- 站点中的相对地址（api / ext / jar）自动还原，支持远程与本地文件。
-- 站点自检：逐个体检站点，给出分类数量与可用性结论。
-- 「添加配置源 → 导入本地文件…」可选择配置文件或猫源 ZIP。包内至少各有一个 JSON 和 JAR 即满足文件要求，支持自定义文件名和子目录。
-- 支持猫源 Node、Python、道长 T3 PHP 脚本与 T4 HTTP 接口，以及 XPTV、NowShowTime、drpy2 等订阅格式。Windows 包自带对应运行时。
-- 影视源和直播源分别支持分类、备注与批量移动。支持网页验证的站点可用独立浏览器资料完成验证后重试。
+## 🖥️ 功能全览
 
-### 点播
+### 1. 内容与源管理
+- **配置导入**：支持影视源 JSON、多仓仓库清单及 CMS 资源站导入；相对地址（api / ext / jar）自动补全。
+- **本地包导入**：支持一键导入包含配置与 jar 的猫源 ZIP 压缩包，自动识别解压与装载。
+- **环境免配**：安装包已随包捆绑预置 JRE、Node.js、Python 等微运行时，无需用户额外配置系统环境变量。
+- **健康度体检**：内置站点自检与分类探活机制，秒级定位失效或响应缓慢的站点。
+- **浏览器验证穿透**：针对具备验证码或防盗链校验的站点，支持以沙箱浏览器身份完成验证并平滑续播。
 
-- 首页分类浏览、海报瀑布流，站点与分类可快速切换。
-- 分类页滚动到底自动加载下一页并增量追加，直到该分类取完；页码按站点声明推进，遇到不响应翻页的站点会自行收住而不是空转。
-- 全局搜索逐站显示结果，结果可按站点筛选。在「设置 → 通用 → 聚合搜索站点」可为每份配置单独勾选参与搜索的站点。默认全选，取消所有勾选会暂停该配置的聚合搜索。
-- 首页可从热门海报点缩略图选片，也可点「评分盲开」挑片。详情显示更新状态、线路和选集，以及同站同片上次看到的集数和进度。
-- 播放历史与断点续播，保留条数可配置（30–500，默认 150）。
-- 可选 TMDB 新版影片详情，在「设置 → 外观 → 影片详情」开启，经典布局仍默认。新版保留原站选集、收藏与续播，异步补充背景、简介、演员、豆瓣短评和相似推荐。
-- 资料／图片失败时只补经过同片核验的豆瓣缺项：横版海报优先、横剧照回退，演员头像按同片同名回退；不放大竖封面，不用不确定的同名片拼接资料。
+### 2. 点播浏览与聚合搜索
+- **沉浸式画廊**：高帧率海报瀑布流，站点与分类无缝水平横滚，滚动触底增量加载。
+- **多站点聚合搜索**：输入关键字跨站点并发检索，实时聚合各站结果；可根据配置单独勾选参与搜索的站点。
+- **影片详情与资料补全**：提供经典与新版两套详情版式，支持展示同站同片历史观看进度，并对豆瓣/TMDB 缺项资料进行同片核验补全。
 
-### 直播
+### 3. 播放控制与解码
+- **多轨调度**：视频轨、音轨、字幕轨自由切换，支持软解与 D3D11VA 硬解热切换。
+- **外挂字幕**：支持将外部 SRT、ASS、SSA、VTT 字幕拖拽或选择挂载，文字字幕支持 75%~200% 动态字号无损缩放。
+- **播放连续性保证**：换线失败自动尝试备用线路；播放过程由伴随服务维持租约，遇异常网络闪断自动实现有界恢复。
 
-- 在「设置 → 直播源」导入 TXT、M3U、M3U8 或 JSON 频道表，同一路径再次导入可刷新频道。
-- 频道按来源分组，支持分组浏览与频道搜索。
-- EPG 节目单：查看频道当前与后续节目。
-- 播放画面中部偏左（含中线）滚轮上滚上一台、下滚下一台，右侧仍调节音量。
+### 4. 电视直播
+- **多格式导入**：支持 TXT、M3U、M3U8、JSON 频道表导入。
+- **EPG 节目单**：支持查看当前正在播放节目与后续时间表。
+- **滚轮切台**：播放画面中央及偏左区域滚轮上下滚动即时切台，右侧控制音量。
 
-### 播放器
+### 5. 存储与系统
+- **数据自主掌控**：支持设置自定义本地数据目录；全量设置、历史、收藏与源一键 JSON 导出与恢复。
+- **界面定制**：浅色、深色、跟随系统三种外观主题，支持自定义本地高清壁纸。
 
-- libmpv 内核，支持 D3D11VA、D3D11VA（拷回模式）、DXVA2 硬件解码，并显示硬解状态。
-- 倍速菜单提供 0.5–3.0 倍速，同片切集、换线和刷新可保留手选倍率。可调音量与画面缩放，还可在画面左上角显示实际分辨率。
-- 点播弹幕可按片名、集数手动搜索匹配。
-- 视频轨、音轨、字幕轨切换，支持关闭字幕；音轨/字幕菜单按真实引擎选择更新。
-- mpv 文本字幕可按 75%、100%、125%、150%、200% 调整字号并恢复默认；位图字幕及 MDK / Media Foundation 不提供此字号能力。
-- mpv 可从系统文件选择器挂载 SRT、ASS、SSA、VTT，取消、坏文件及换片不会串用上一片字幕。
-- 片头 / 片尾跳过，按毫秒精确配置。
-- 自动换线与手动换线，失败提示统一呈现。
-- 键盘快捷键与鼠标操作并行。
-- 播放/暂停/缓冲期间维持伴随服务租约，代理异常时有界恢复，保留播放位置。
-- 点播自然结束后自动切下一集，可在「设置 → 播放器与解码」关闭；点播失败后可直接重选线路与剧集。
-- Windows 播放页可在 mpv、MDK 与 Media Foundation 之间切换，默认仍为 mpv。格式、字幕与硬解能力以内核和系统支持为准，不承诺新内核普遍更省电。
+---
 
-### 界面与交互
+## 📥 下载与安装
 
-- 左侧导航 + 顶部搜索 + 站点分类横滚 + 海报网格的桌面布局。
-- 详情、选集、收藏、历史、直播频道与 EPG 以浮层呈现，不打断当前播放。
-- 支持深色 / 浅色 / 跟随系统三档主题，可自定义壁纸。
-- 记忆窗口大小与位置，并限制最小窗口尺寸。
-- 主侧栏可收起并在重启后保持状态。系统开启减少动画时，首页停止自动轮播。
+适用于 **Windows 10 / 11 x64** 操作系统。
 
-### 媒体与数据
+| 版本类型 | 文件名格式 | 适用场景 |
+| :--- | :--- | :--- |
+| **标准安装包** | `kimboku-windows-x64-v1.4.2-setup.exe` | 推荐普通用户使用，附带完整开始菜单与快捷方式，支持平滑覆盖升级 |
+| **便携绿色版** | `kimboku-windows-x64-v1.4.2-portable.zip` | 解压至任意具备写权限的目录即可直接运行 `xiugou_tv.exe`，不留系统注册痕迹 |
 
-- 媒体直链、本地文件与 WebDAV 目录均可直接浏览播放（不支持磁力链）。
-- WebDAV 支持保存最多 20 个连接；凭据由当前 Windows 用户加密保护，不进入普通备份。
-- 数据目录可自行指定并迁移，启动前校验写入权限。
-- 备份与恢复覆盖历史、收藏与偏好设置，恢复后自动重启生效。
+> **下载地址**：请前往 [GitHub Releases](https://github.com/jacurtwong/KimBoku/releases/latest) 获取最新发布产物。
+>
+> 每次发行均附带对应的 `SHA256SUMS` 校验清单文件，建议在下载后使用 `certutil -hashfile <包名> SHA256` 核对哈希一致性。
 
-## 下载与升级
+---
 
-适用于 Windows 10 / 11 x64，随包提供 Java、Node、Python、PHP 和媒体运行时。安装版与便携版从 [GitHub Releases](https://github.com/qfw66/xiugou-tv/releases/latest) 获取，摘要以该次发行附带的 SHA256SUMS 为准。
+## ⌨️ 快捷键速查
 
-安装版请先完全退出旧程序再运行安装向导；便携版解压到新的可写目录后运行 `xiugou_tv.exe`。升级前在旧版设置中导出备份，记下实际资料目录并退出；确认配置、历史、收藏和偏好正常前，保留旧目录与备份。
+| 按键 | 功能 | 说明 |
+| :---: | :--- | :--- |
+| **Space** | 播放 / 暂停 | 快速启停 |
+| **← / →** | 后退 / 前进 | 步进跳转进度 |
+| **↑ / ↓** | 音量调节 | 步进调整系统/引擎音量 |
+| **F** | 全屏切换 | 进入 / 退出全屏 |
+| **M** | 静音切换 | 快速静音 |
+| **D** | 广告剪辑调试面板 | 唤起/隐藏右上角 HLS 广告剪辑决策与分段详情卡片 |
+| **I** | 播放信息 OSD | 唤起/隐藏四角实时信息浮层（分辨率、系统时间、进度、缓冲与真实速度） |
+| **B** | 弹幕开关 | 开启 / 关闭弹幕渲染 |
+| **Esc** | 返回 / 退出 | 退出选集抽屉、退出全屏或退出当前播放页面 |
 
-第三方组件及 MDK／FFmpeg 的分发材料见 [第三方许可](THIRD_PARTY_LICENSES.md)。
+---
 
-## 界面截图
+## 🛠️ 从源码构建
 
-### 首页
+### 环境要求
+- Windows 10 / 11 x64
+- [Flutter SDK](https://flutter.dev) (>= 3.44.0) 与 Dart SDK (>= 3.12.0)
+- Visual Studio 2022（需勾选 "Desktop development with C++"）
+- Inno Setup 6+（用于打包 Windows 安装程序）
+- PowerShell 7+
 
-<p align="center">
-  <img src="assets/snapshot/home.png?v=1.0.1" alt="修狗TV 首页：左侧导航、顶部搜索与海报网格" width="900">
-</p>
+### 构建步骤
+```powershell
+# 1. 克隆代码仓库
+git clone https://github.com/jacurtwong/KimBoku.git
+cd KimBoku
 
-<p align="center">左侧导航 + 顶部搜索 + 站点分类横栏 + 海报网格；站点与分类都能一键切换。</p>
+# 2. 安装 Flutter 依赖
+flutter pub get
 
-### 播放历史
+# 3. 运行本地自动化单测
+flutter test
 
-<p align="center">
-  <img src="assets/snapshot/history.png?v=1.0.1" alt="修狗TV 播放历史" width="900">
-</p>
+# 4. 执行全自动化流水线构建（包含编译 Release、注入 Commit、打包安装器与便携包、生成 SHA256SUMS）
+powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
+```
 
-<p align="center">按时间倒序记录剧集与观看进度，点击即从上次位置续播；保留条数可配置（30–500，默认 150）。</p>
+构建成功后，所有最终物料将输出在 `dist/` 目录下。
 
-### 设置
+---
 
-<p align="center">
-  <img src="assets/snapshot/settings.png?v=1.0.1" alt="修狗TV 设置" width="900">
-</p>
+## 📜 鸣谢与生态开源
 
-<p align="center">主题与壁纸、播放器、数据目录、站点自检与备份恢复集中在这里。</p>
+- 本项目的播放内核深度依托于 [media_kit](https://github.com/media-kit/media-kit)（基于卓越的 libmpv 开源多媒体套件）。
+- 影视配置与插件兼容规范参考并吸纳了 FongMi（[FongMi/TV](https://github.com/FongMi/TV)）以及 TVBox / CatVod 开放社区的长期实践，特此致敬所有无私奉献的开源作者。
+- 更多第三方组件及其遵循的许可证说明，请详见安装目录下的 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。
 
+---
 
-## 从源码构建
+## 📄 开源许可证
 
-弹幕与共享跳过片段依赖维护者自部署的在线服务，直接用源码构建时这两项功能不会出现（其余功能不受影响）。
-需要的话请看 [开发者指北](DEVELOPER_GUIDE.md)，按说明部署服务并配置 `config/app.env`。普通用户直接下载 Releases 安装包即可，无需任何配置。
-
-从源码制作 Windows 完整包时，`companion/noderuntime/node.exe` 使用 Node.js 24.19.0 的 Windows x64 官方二进制，SHA-256 见 `companion/noderuntime/provenance.json`。PHP 可用 `scripts/setup_php_runtime.ps1` 准备。已有同版本便携包的开发者也可在校验 ZIP 后，将包内 `companion/dist/` 的 `noderuntime`、`phpruntime`、`pyruntime` 分别复制到源码的 `companion/`，将 `runtime/jre` 复制到源码的同名位置。
-
-## 上游来源
-
-本项目的产品形态与交互参考了 FongMi 系列（[FongMi/TV](https://github.com/FongMi/TV)）以及 TVBox / CatVod 生态的既有实现，解析层遵循 CatVod spider 契约，以便直接运行既有插件。感谢这些项目及其贡献者长期的开源工作。
-
-播放基于 [media_kit](https://github.com/media-kit/media-kit)（libmpv）；部分兼容能力借助 [unidbg](https://github.com/zhkl0228/unidbg) 与 [dex2jar](https://github.com/pxb1988/dex2jar) 实现。
-
-安装目录的 `licenses/THIRD_PARTY_LICENSES.md` 列出第三方组件的来源与许可。项目从 v1.1.0 起对新贡献采用 DCO 签名。感谢 @digiprospector 修复音轨和字幕的选中状态，并贡献聚合搜索站点选择。[PR #21](https://github.com/qfw66/xiugou-tv/pull/21) · [PR #25](https://github.com/qfw66/xiugou-tv/pull/25)
-
-## 许可证
-
-本项目以 GPL-3.0 协议发布，详见 [LICENSE](LICENSE)。
+本项目依据 **GPL-3.0** 开源许可证分发与维护，完整许可条款详见 [LICENSE](LICENSE)。

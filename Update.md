@@ -1,8 +1,41 @@
-# 修狗TV（xiugou-tv）变更日志
+# KimBoKu（金播库）变更日志
 
 本文档遵循「发布工程与文档纪律」，每次改动均倒序追加一条，格式统一为：
 「版本 / 日期 / 标题 / 背景 / 改动 / 验证 / 已知边界（或回滚方式）」。
 条目重点说明改动的「为什么（业务背景/问题根因/预期收益）」，而非单纯罗列修改的文件。
+
+---
+
+## [1.4.2] - 2026-11-23
+
+### 更新机制脱钩、品牌显示名唯一收敛、发布工程与 README 重构
+
+- **背景**：
+  在完成 KimBoKu 品牌命名与 3D 图标重塑后，需将应用与上游仓库彻底脱钩，转由独立维护的公开仓库发布更新；同时修复启动自动检查与异步偏好加载之间潜在的竞争跳过问题；统一收敛全工程显示名常量，严守底层数据标识不变；并彻底重写 README.md 与全自动化发布脚本。
+- **改动**：
+  1. **更新源与发布机制完全脱钩（独立闭环）**：
+     - `update_service.dart` 中的官方更新源 `officialUpdateSourceUrl` 与发布页 `releasePageUrl` 全面指向独立仓库 `jacurtwong/KimBoku`；
+     - 彻底切断任何指向上游仓库的更新请求与发布页跳转；
+     - `scripts/installer.iss` 发布者信息与支持地址全面对齐新仓库。
+  2. **启动自动检查与异步偏好加载保护**：
+     - `UpdatePreferencesNotifier` 支持加载 Future 缓存与 `isLoaded` 状态判断，避免并发触发重复读取；
+     - `UpdateCheckHost` 在启动检查前通过异步等待（最长 3 秒）确保磁盘偏好正确载入，避免因「未读完即打标记」导致自动检查被永久跳过；
+     - 关于页宿主 `AboutUpdateSectionHost` 在初次展示时静默后台触发一次最新版本核验（不弹窗、仅刷新状态文案），并通过静态标志确保单个会话只刷新一次。
+  3. **品牌显示名收敛与四处强一致（四处同步，内部标识不动）**：
+     - 唯一常量：应用显示名仅在 `lib/core/app_info.dart` 的 `appDisplayName = 'KimBoKu'` 一处定义，侧栏、关于卡片、备份类型、原生窗口均直接引用；
+     - 系统级对齐：Windows 窗口标题（`main.cpp`）、文件属性（`Runner.rc`）及安装器名称（`installer.iss`）严格统一为 `KimBoKu`；
+     - 守护底层兼容标识：可执行文件名（`xiugou_tv.exe`）、安装器 AppId GUID 及数据目录名（`%APPDATA%\XiugouTV`）严格保持不变，杜绝覆盖升级失效、历史记录与备份中断。
+  4. **构建脏检查优化与全套文档重构**：
+     - `build_info.dart` 与构建脚本严格排除 Flutter 编译期重写的临时文件（`generated_plugin_registrant.*` 与 `generated_plugins.cmake`），确保干净仓库打出的安装包 Commit 哈希不带伪 `-dirty`；
+     - 重写全新 `README.md`，呈现现代化设计横幅、详细核心架构、HLS 广告剪辑与双浮层操作指南、源码构建说明及鸣谢；
+     - 补充更新机制脱钩及并发去重单测（`test/update_decouple_test.dart`）。
+- **验证**：
+  - 单元测试：35/35 全套单测全绿通过（`flutter test`）；
+  - 静态检查：`flutter analyze --no-fatal-infos` 0 error 0 warning；
+  - 版本号三处完全一致：`pubspec.yaml` (1.4.2)、`scripts/installer.iss` (1.4.2)、`README.md` (1.4.2)；
+  - 敏感信息自查：无硬编码真实站点名、域名或凭据信息。
+- **已知边界（或回滚方式）**：
+  - 老用户旧数据目录与数据库完全复用，支持直接覆盖升级。
 
 ---
 

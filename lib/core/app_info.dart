@@ -1,5 +1,11 @@
 import 'package:package_info_plus/package_info_plus.dart';
 
+/// 程序显示名：窗口标题、关于页、侧栏、安装器统一用它。
+const String appDisplayName = 'KimBoKu';
+
+/// 窄位置（侧栏）用的短名。
+const String appShortName = 'KimBoKu';
+
 /// 构建注入的应用版本（`package_info_plus` 读取 exe 版本资源），供备份等
 /// 非 UI 路径使用；未加载或读取失败时为 null（调用方兜底为「未知版本」）。
 String? appVersionLabel;
