@@ -10,17 +10,20 @@ import '../../theme/app_tokens.dart';
 class VodListView extends StatelessWidget {
   final List<VodItem> items;
   final ValueChanged<VodItem> onItemTap;
+  final ScrollController? controller;
 
   const VodListView({
     super.key,
     required this.items,
     required this.onItemTap,
+    this.controller,
   });
 
   @override
   Widget build(BuildContext context) {
     final palette = AppPalette.of(context);
     return ListView.separated(
+      controller: controller,
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       itemCount: items.length,
       separatorBuilder: (_, __) =>

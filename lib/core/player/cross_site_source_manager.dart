@@ -618,27 +618,36 @@ class CrossSiteSourceManager extends ValueNotifier<SourceCandidatesState> {
     return completer.future;
   }
 
-  /// 过滤出片名吻合的命中，并按站点去重优选最佳匹配项
+  /// 过滤出精准片名吻合的命中，并按站点去重优选最佳匹配项
   List<(Site, VodItem)> _filterMatchingHits(
     List<(Site, VodItem)> hits,
     CrossSiteTarget target,
   ) {
     final targetNorm = TitleKeywordCleaner.normalizeTitle(target.title);
     final siteBestHit = <String, (Site, VodItem, int)>{};
+    final targetHasMarker = TitleKeywordCleaner.containsContentMarker(target.title);
 
     for (final hit in hits) {
       final site = hit.$1;
       final item = hit.$2;
+
+      // 1. 衍生内容检查：目标不是解说/预告，候选命中若带解说/预告等衍生标记，坚决拒绝！
+      final itemHasMarker = TitleKeywordCleaner.containsContentMarker(item.name) ||
+          (item.typeName != null && TitleKeywordCleaner.containsContentMarker(item.typeName!)) ||
+          (item.remarks != null && TitleKeywordCleaner.containsContentMarker(item.remarks!));
+      if (!targetHasMarker && itemHasMarker) continue;
+
+      // 2. 精准片名匹配（部数/季号/基础片名强一致）
+      if (!TitleKeywordCleaner.isExactTitleMatch(
+        targetTitle: target.title,
+        candidateTitle: item.name,
+      )) {
+        continue;
+      }
+
       final itemNorm = TitleKeywordCleaner.normalizeTitle(item.name);
-      if (itemNorm.isEmpty) continue;
 
-      // 只要规范化片名互相包含，即视为命中
-      final isMatch = itemNorm == targetNorm ||
-          itemNorm.contains(targetNorm) ||
-          targetNorm.contains(itemNorm);
-      if (!isMatch) continue;
-
-      // 匹配质量打分
+      // 3. 匹配质量打分
       var score = 100;
       if (itemNorm == targetNorm) {
         score += 1000;
@@ -646,10 +655,11 @@ class CrossSiteSourceManager extends ValueNotifier<SourceCandidatesState> {
         score += (200 - (itemNorm.length - targetNorm.length).abs() * 10).clamp(0, 200);
       }
 
-      final isTrailer = item.name.contains('预告') || item.name.contains('花絮') || item.name.contains('特辑');
-      final targetIsTrailer = target.title.contains('预告') || target.title.contains('花絮');
-      if (isTrailer && !targetIsTrailer) {
-        score -= 500;
+      // 年份匹配加分
+      final targetYear = target.year;
+      final itemYear = item.year != null ? int.tryParse(item.year!.trim()) : null;
+      if (targetYear != null && itemYear != null && targetYear == itemYear) {
+        score += 200;
       }
 
       // 同源（同站点）优先保留匹配得分最高的 1 条

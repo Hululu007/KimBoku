@@ -86,6 +86,7 @@ import 'ui/desktop/catalog/category_filter_bar.dart';
 import 'ui/desktop/catalog/catalog_folder_browser.dart';
 import 'ui/desktop/catalog/douban_poster_image.dart';
 import 'ui/desktop/catalog/poster_image.dart';
+import 'ui/desktop/catalog/back_to_top_button.dart';
 import 'ui/desktop/catalog/rating_pick_button.dart';
 import 'ui/desktop/catalog/site_information_dialog.dart';
 import 'core/category/category_filter_service.dart';
@@ -7153,6 +7154,8 @@ class _DesktopMainViewState extends ConsumerState<DesktopMainView> {
                                               ? VodListView(
                                                   items: visibleItems,
                                                   onItemTap: _onItemClicked,
+                                                  controller:
+                                                      _gridScrollController,
                                                 )
                                               : (_isDoubanHome &&
                                                       !_isSearching &&
@@ -7332,6 +7335,12 @@ class _DesktopMainViewState extends ConsumerState<DesktopMainView> {
               ),
             ],
           ),
+        ),
+        // ==================== 回到顶部悬浮入口 ====================
+        Positioned(
+          right: 56,
+          bottom: 72,
+          child: BackToTopButton(controller: _gridScrollController),
         ),
         // ==================== 评分盲开浮动入口（豆瓣大厅 / 站源网格 / 搜索态都可用） ====================
         Positioned(
