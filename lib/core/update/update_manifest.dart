@@ -67,9 +67,11 @@ class UpdateManifest {
 
   /// 挑选安装版资产：优先精确命名，其次任意 `*-setup.exe`（容忍发布时命名微调）。
   UpdateAsset? installerFor(String version) {
-    final exact = 'xiugou-tv-windows-x64-v$version-setup.exe'.toLowerCase();
+    final exact = 'kimboku-windows-x64-v$version-setup.exe'.toLowerCase();
+    final legacy = 'xiugou-tv-windows-x64-v$version-setup.exe'.toLowerCase();
     for (final asset in assets) {
-      if (asset.name.toLowerCase() == exact) return asset;
+      final name = asset.name.toLowerCase();
+      if (name == exact || name == legacy) return asset;
     }
     for (final asset in assets) {
       if (asset.isInstaller) return asset;

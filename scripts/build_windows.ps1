@@ -421,7 +421,7 @@ Write-Host "  [+] Clean application stage: $StagedAppDir ($($ApplicationStage.Fi
 $Artifacts = @()
 if (-not $SkipZip) {
     Write-Host "[4/5] Packaging Portable ZIP archive..." -ForegroundColor Yellow
-    $ZipPath = Join-Path $PackageStage "xiugou-tv-windows-x64-v$Version-portable.zip"
+    $ZipPath = Join-Path $PackageStage "kimboku-windows-x64-v$Version-portable.zip"
 
     # 不用 Compress-Archive / ZipFile.CreateFromDirectory：在 Windows PowerShell 5.1（.NET Framework 兼容模式）下
     # 两者都把条目路径写成反斜杠（runtime\jre\...），不符合 zip 规范（APPNOTE 4.4.17 要求 /），
@@ -473,7 +473,7 @@ if (-not $SkipInstaller) {
         if ($LASTEXITCODE -ne 0) {
             throw "Inno Setup compilation failed with exit code $LASTEXITCODE."
         }
-        $Artifacts += Join-Path $PackageStage "xiugou-tv-windows-x64-v$Version-setup.exe"
+        $Artifacts += Join-Path $PackageStage "kimboku-windows-x64-v$Version-setup.exe"
     } else {
         throw "ISCC.exe not found. Install Inno Setup or explicitly use -SkipInstaller."
     }

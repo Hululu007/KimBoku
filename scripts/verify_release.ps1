@@ -65,8 +65,8 @@ if (-not $SkipInstaller) {
 }
 $ArtifactDir = (Resolve-Path -LiteralPath $ArtifactDir).Path
 
-$ZipName = "xiugou-tv-windows-x64-v$Version-portable.zip"
-$SetupName = "xiugou-tv-windows-x64-v$Version-setup.exe"
+$ZipName = "kimboku-windows-x64-v$Version-portable.zip"
+$SetupName = "kimboku-windows-x64-v$Version-setup.exe"
 $ZipPath = Join-Path $ArtifactDir $ZipName
 $SetupPath = Join-Path $ArtifactDir $SetupName
 $SumsPath = Join-Path $ArtifactDir "SHA256SUMS"
