@@ -84,4 +84,9 @@ abstract class PlayerEngine {
   ///
   /// OSD 浮层必须以此为准；取不到就只显示缓冲秒数，严禁伪造数字。
   Future<double?> readNetworkSpeed() async => null;
+
+  /// 从底层播放器读取 demuxer 预读缓存时长；不支持时返回 null。
+  ///
+  /// OSD 浮层优先以此为准；取不到时退回基于 (buffer - position) 计算相对预读量。
+  Future<Duration?> readCacheDuration() async => null;
 }

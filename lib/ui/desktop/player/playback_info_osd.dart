@@ -15,6 +15,8 @@ import '../../theme/app_tokens.dart';
 /// - 右下：瞬时下载速度 + 缓冲秒数
 ///
 /// 速度来自 mpv `cache-speed`，构建不支持时不显示这一段——宁可不显示也不编造。
+/// 缓冲时长优先读取 mpv `demuxer-cache-duration`，不支持时退回基于 `buffer - position`
+/// 计算相对预读秒数（media_kit 的 buffer 属性为 demuxer 缓存末端时间戳，不能直接作为预读秒数显示）。
 class PlaybackInfoOsd extends StatefulWidget {
   const PlaybackInfoOsd({
     super.key,
@@ -32,19 +34,25 @@ class PlaybackInfoOsd extends StatefulWidget {
 }
 
 class _PlaybackInfoOsdState extends State<PlaybackInfoOsd> {
+  static const double _labelFontSize = AppType.label + 2; // 15
+  static const double _bodyFontSize = AppType.body + 2; // 14
+
   Timer? _ticker;
   DateTime _now = DateTime.now();
   double? _speed;
+  Duration? _cacheDuration;
 
   @override
   void initState() {
     super.initState();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) async {
       final speed = await widget.engine.readNetworkSpeed();
+      final cacheDuration = await widget.engine.readCacheDuration();
       if (!mounted) return;
       setState(() {
         _now = DateTime.now();
         _speed = speed;
+        _cacheDuration = cacheDuration;
       });
     });
   }
@@ -76,7 +84,7 @@ class _PlaybackInfoOsdState extends State<PlaybackInfoOsd> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(child: _buildTopLeft(title, dimensions, isLive)),
-                _text(_clock(_now), size: AppType.label),
+                _text(_clock(_now), size: _labelFontSize),
               ],
             ),
             const Spacer(),
@@ -84,7 +92,7 @@ class _PlaybackInfoOsdState extends State<PlaybackInfoOsd> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Expanded(child: _buildProgress(position, duration, isLive)),
-                _buildRightMeta(buffer, isLive),
+                _buildRightMeta(buffer, position, isLive),
               ],
             ),
           ],
@@ -101,10 +109,10 @@ class _PlaybackInfoOsdState extends State<PlaybackInfoOsd> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (title.isNotEmpty) _text(title, size: AppType.label),
+        if (title.isNotEmpty) _text(title, size: _labelFontSize),
         if (resolution.isNotEmpty) ...[
           const SizedBox(height: 2),
-          _text(resolution, size: AppType.body, dim: true),
+          _text(resolution, size: _bodyFontSize, dim: true),
         ],
       ],
     );
@@ -116,16 +124,22 @@ class _PlaybackInfoOsdState extends State<PlaybackInfoOsd> {
         : '${_shortClock(position)} / ${_shortClock(duration)}';
     return Align(
       alignment: Alignment.bottomLeft,
-      child: _text(text, size: AppType.label),
+      child: _text(text, size: _labelFontSize),
     );
   }
 
-  Widget _buildRightMeta(Duration buffer, bool isLive) {
+  Widget _buildRightMeta(Duration buffer, Duration position, bool isLive) {
     final parts = <String>[];
     final speed = _speed;
     if (speed != null && speed > 0) parts.add(_speedText(speed));
-    parts.add('缓冲 ${(buffer.inMilliseconds / 1000).toStringAsFixed(1)}s');
-    return _text(parts.join('   '), size: AppType.body);
+
+    final fallbackAhead = isLive
+        ? (buffer > position ? buffer - position : buffer)
+        : (buffer > position ? buffer - position : Duration.zero);
+    final effectiveAhead = _cacheDuration ?? fallbackAhead;
+
+    parts.add('缓冲 ${(effectiveAhead.inMilliseconds / 1000).toStringAsFixed(1)}s');
+    return _text(parts.join('   '), size: _bodyFontSize);
   }
 
   /// 视频画面上的文字：不铺底、只加投影，避免遮挡画面内容。

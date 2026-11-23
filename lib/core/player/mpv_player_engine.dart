@@ -119,6 +119,21 @@ class MpvPlayerEngine
     }
   }
 
+  @override
+  Future<Duration?> readCacheDuration() async {
+    if (_disposed || !_mpvOwnsPlayback) return null;
+    final platform = _player.platform;
+    if (platform is! NativePlayer) return null;
+    try {
+      final value =
+          double.tryParse(await platform.getProperty('demuxer-cache-duration'));
+      if (value == null || !value.isFinite || value < 0) return null;
+      return Duration(microseconds: (value * 1e6).round());
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<bool> selectPlaybackBackend(NativePlaybackBackend? backend,
       {EmbeddedPlaybackChannel channel = const EmbeddedPlaybackChannel()}) =>
       _selectBackend(backend, channel);
