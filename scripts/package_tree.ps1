@@ -48,6 +48,7 @@ function Get-PackagePathDisposition([string]$RelativePath, [bool]$IsDirectory) {
     if ($IsDirectory -and $RelativePath -match '^companion/dist/(pyshell|pyruntime)/(.*/)?(__pycache__|\.pytest_cache)$') { return 'Exclude' }
     if (-not $IsDirectory -and $RelativePath -match '^(companion/dist/)?[^/]+\.(log|dmp)$') { return 'Exclude' }
     if (-not $IsDirectory -and $RelativePath -match '(^|/)(hs_err_pid[0-9]+|replay_pid[0-9]+)\.log$') { return 'Exclude' }
+    if (-not $IsDirectory -and $RelativePath -match '(?i)LOCAL_LLM_REPLICATION_GUIDE\.md$') { return 'Exclude' }
     if (-not $IsDirectory -and $RelativePath -match '^companion/dist/phpruntime/(php_errors\.log|error_log)$') { return 'Exclude' }
     # The pinned ANGLE archive also ships an unused debug zlib.dll (VCRUNTIME140D).
     # No ANGLE/media module imports it. The package PE gate must fail if a future

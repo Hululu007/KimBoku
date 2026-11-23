@@ -67,7 +67,7 @@ $generatedFiles = @(
     'hs_err_pid123.log', 'replay_pid123.log', 'KimBoKu.exe.dmp', 'companion/dist/companion.log',
     'companion/dist/phpruntime/php_errors.log', 'companion/dist/pyshell/base/__pycache__/spider.cpython-314.pyc',
     'companion/dist/pyruntime/Lib/site-packages/pkg/__pycache__/cache.cpython-314.pyc',
-    'companion/dist/pyshell/.pytest_cache/private-token', 'zlib.dll'
+    'companion/dist/pyshell/.pytest_cache/private-token', 'zlib.dll', 'LOCAL_LLM_REPLICATION_GUIDE.md'
 )
 foreach ($rel in $generatedFiles) { Write-Fixture $source $rel 'fixture-private-state' }
 # An exclusive file handle makes accidental copying/hashing of user_data fail.
