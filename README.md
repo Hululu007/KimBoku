@@ -1,14 +1,14 @@
-# 修狗TV（xiugou-tv）
+# KimBoKu（金播库）
 
 一款面向 Windows 的桌面影视聚合播放客户端。
 
 <p align="center">
-  <img src="assets/icons/app_icon.png" width="128" alt="修狗TV 图标">
+  <img src="assets/icons/kimboku_banner.png" width="720" alt="KimBoKu 品牌标识">
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/平台-Windows%2010%2F11%20x64-0078D4" alt="平台">
-  <img src="https://img.shields.io/badge/版本-1.4.0-2ea44f" alt="版本">
+  <img src="https://img.shields.io/badge/版本-1.4.1-2ea44f" alt="版本">
   <img src="https://img.shields.io/badge/许可证-GPL--3.0-blue" alt="许可证">
   <a href="https://linux.do" target="_blank">
     <img src="https://img.shields.io/badge/社区-LINUXDO-blue" alt="社区">
@@ -21,7 +21,7 @@
 
 ## 简介
 
-修狗TV 是一款运行在 Windows 10/11 x64 上的桌面影视客户端。导入你自己的影视配置后，就可以在同一套界面里浏览分类、搜索剧集、选集播放，并随时切换到电视直播。
+KimBoKu（金播库）是一款运行在 Windows 10/11 x64 上的桌面影视客户端。导入你自己的影视配置后，就可以在同一套界面里浏览分类、搜索剧集、选集播放，并随时切换到电视直播。
 
 播放内核基于 libmpv（media_kit），提供硬件解码、多轨切换、倍速与断点续播。解析层内置 JVM 运行时，可直接运行既有生态的 spider 插件，因此你现有的站点配置基本可以原样复用。
 

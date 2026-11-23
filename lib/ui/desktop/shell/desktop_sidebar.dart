@@ -70,7 +70,7 @@ class DesktopSidebar extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '修狗TV',
+                  'KimBoKu',
                   style: TextStyle(
                     fontSize: AppType.caption,
                     fontWeight: FontWeight.bold,

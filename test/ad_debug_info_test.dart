@@ -38,10 +38,10 @@ void main() {
         sourceHost: 'example.com',
         proxyHost: '127.0.0.1:54321',
         outcome: AdFilterOutcome.filtered,
-        cuts: const [
+        cuts: [
           HlsAdCut(start: 10.0, end: 25.0, placement: HlsAdPlacement.middle, segments: 3),
         ],
-        blocks: const [
+        blocks: [
           HlsAdBlock(duration: 10.0, segments: 2, isAd: false),
           HlsAdBlock(duration: 15.0, segments: 3, isAd: true, placement: HlsAdPlacement.middle),
           HlsAdBlock(duration: 100.0, segments: 20, isAd: false),
@@ -50,7 +50,7 @@ void main() {
         filteredDuration: 110.0,
         cutCount: 1,
         removedSeconds: 15.0,
-        shiftedStart: const Duration(seconds: 5),
+        shiftedStart: Duration(seconds: 5),
         reason: '成功剪除 1 处插播广告',
       );
 

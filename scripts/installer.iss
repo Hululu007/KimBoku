@@ -1,6 +1,6 @@
 ﻿; Script generated for XiugouTV Windows x64 Installer
 #ifndef AppVersion
-  #define AppVersion "1.4.0"
+  #define AppVersion "1.4.1"
 #endif
 #ifndef SourceDir
   #error SourceDir must be the clean application stage created by scripts/package_tree.ps1
@@ -14,24 +14,24 @@
 
 [Setup]
 AppId={{E88D6F21-6A2F-4E8C-B8FB-5A86FA8F0C42}}
-AppName=XiugouTV
+AppName=KimBoKu
 AppVersion={#AppVersion}
 ; 安装包自身的版本资源（FileVersion / ProductVersion），发布门禁据此核对版本号。
 VersionInfoVersion={#AppVersion}
 VersionInfoProductVersion={#AppVersion}
-AppPublisher=XiugouTV Project
+AppPublisher=KimBoKu Project
 AppPublisherURL=https://github.com/qfw66/xiugou-tv
 AppSupportURL=https://github.com/qfw66/xiugou-tv
 AppUpdatesURL=https://github.com/qfw66/xiugou-tv
-DefaultDirName={autopf}\XiugouTV
-DefaultGroupName=XiugouTV
+DefaultDirName={autopf}\KimBoKu
+DefaultGroupName=KimBoKu
 DisableProgramGroupPage=yes
 ; 默认仍按管理员装到 Program Files；仅允许命令行 /CURRENTUSER 免提权安装，
 ; 供发布门禁静默装到临时目录做启动冒烟（向导界面不变）。
 PrivilegesRequiredOverridesAllowed=commandline
 LicenseFile=
 OutputDir={#OutputDir}
-OutputBaseFilename=xiugou-tv-windows-x64-v{#AppVersion}-setup
+OutputBaseFilename=kimboku-windows-x64-v{#AppVersion}-setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible

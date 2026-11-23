@@ -90,7 +90,7 @@ class DesktopWindowManager with WindowListener {
       backgroundColor: backgroundColor,
       skipTaskbar: false,
       titleBarStyle: TitleBarStyle.hidden,
-      title: '修狗TV',
+      title: 'KimBoKu',
     );
 
     // 异步等待原生窗口就绪后展示，不阻塞 main() 中 runApp 挂载

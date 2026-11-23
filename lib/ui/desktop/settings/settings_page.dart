@@ -4380,7 +4380,7 @@ class _DataBackupCardState extends State<_DataBackupCard> {
     final location = await getSaveLocation(
       suggestedName: suggestedName,
       acceptedTypeGroups: const [
-        XTypeGroup(label: '修狗TV 数据备份', extensions: ['json']),
+        XTypeGroup(label: 'KimBoKu 数据备份', extensions: ['json']),
       ],
     );
     return location?.path;
@@ -4391,7 +4391,7 @@ class _DataBackupCardState extends State<_DataBackupCard> {
     if (pick != null) return pick();
     final file = await openFile(
       acceptedTypeGroups: const [
-        XTypeGroup(label: '修狗TV 数据备份', extensions: ['json']),
+        XTypeGroup(label: 'KimBoKu 数据备份', extensions: ['json']),
       ],
     );
     return file?.path;
@@ -5133,7 +5133,7 @@ class _AboutPanelState extends State<AboutPanel> {
             style: TextStyle(
                 color: context.palette.textTitle, fontSize: AppType.heading)),
         content: Text(
-          '将清空修狗TV 的全部数据并恢复到刚安装的状态：所有设置、播放历史、收藏、配置源、直播源、'
+          '将清空 KimBoKu 的全部数据并恢复到刚安装的状态：所有设置、播放历史、收藏、配置源、直播源、'
           '片头片尾记录、壁纸、本地备份与缓存，以及各站源里的网盘登录状态（需重新扫码）都会被删除，且无法恢复。\n应用随后自动重启。是否继续？',
           style: TextStyle(
               color: context.palette.textBody,
@@ -5205,7 +5205,7 @@ class _AboutPanelState extends State<AboutPanel> {
                     width: 88, height: 88, filterQuality: FilterQuality.high),
               ),
               const SizedBox(height: 14),
-              Text('修狗TV',
+              Text('KimBoKu',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                       fontSize: AppType.h2,

@@ -3812,7 +3812,7 @@ class XiugouTvApp extends ConsumerWidget {
         isRealMpvEngine ? buildPlayerTrackNavs(playerEngine) : null;
 
     return MaterialApp(
-      title: '修狗TV',
+      title: 'KimBoKu',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(
           brightness: Brightness.light, palette: AppPalette.light),
@@ -6688,7 +6688,7 @@ class _DesktopMainViewState extends ConsumerState<DesktopMainView> {
               ),
               const SizedBox(height: 18),
               Text(
-                '修狗TV',
+                'KimBoKu',
                 style: TextStyle(
                   fontSize: AppType.h1,
                   fontWeight: FontWeight.bold,
