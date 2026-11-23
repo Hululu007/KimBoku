@@ -67,6 +67,34 @@ if ($Version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$') {
     throw "版本号格式不合法：$Version（期望 x.y.z）"
 }
 
+# 0. 确认程序未在运行（Windows 会锁住 exe 导致链接失败，这是最常见的构建失败原因）
+$runningProcesses = Get-Process -Name "xiugou_tv" -ErrorAction SilentlyContinue
+if ($runningProcesses) {
+    throw "xiugou_tv.exe 正在运行 (PID: $($runningProcesses.Id -join ', '))，请先关闭程序再打包，避免构建链接失败。"
+}
+
+# 校验版本号三处一致：pubspec.yaml / scripts/installer.iss 兜底常量 / README.md 徽章
+$issPath = Join-Path $ProjectRoot "scripts/installer.iss"
+if (Test-Path -LiteralPath $issPath) {
+    $issContent = Get-Content -LiteralPath $issPath -Raw
+    if ($issContent -match '#define\s+AppVersion\s+"([^"]+)"') {
+        $issVersion = $Matches[1]
+        if ($issVersion -ne $Version) {
+            throw "版本号不一致：pubspec.yaml 为 $Version，但 scripts/installer.iss 的 AppVersion 兜底常量为 $issVersion"
+        }
+    }
+}
+$readmePath = Join-Path $ProjectRoot "README.md"
+if (Test-Path -LiteralPath $readmePath) {
+    $readmeContent = Get-Content -LiteralPath $readmePath -Raw
+    if ($readmeContent -match 'img\.shields\.io/badge/版本-([0-9]+\.[0-9]+\.[0-9]+)') {
+        $readmeVersion = $Matches[1]
+        if ($readmeVersion -ne $Version) {
+            throw "版本号不一致：pubspec.yaml 为 $Version，但 README.md 徽章版本为 $readmeVersion"
+        }
+    }
+}
+
 Write-Host "======================================================" -ForegroundColor Cyan
 Write-Host "  修狗TV Build & Packaging System" -ForegroundColor Cyan
 Write-Host "  Target: Windows x64 | Version: $Version" -ForegroundColor Cyan
@@ -163,7 +191,11 @@ $BuildTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 $Commit = ""
 try {
     $Commit = (& git -C $ProjectRoot rev-parse --short=8 HEAD 2>$null).Trim()
-    if ($Commit -and (& git -C $ProjectRoot status --porcelain --untracked-files=no 2>$null)) { $Commit = "$Commit-dirty" }
+    # 只在「源码有未提交改动」时打 -dirty。Flutter 每次构建都会重写 generated_plugin_registrant.* / generated_plugins.cmake
+    # （LF/CRLF 差异），它们不是源码改动——不排掉的话每个包都会显示 -dirty。
+    $dirty = (& git -C $ProjectRoot status --porcelain --untracked-files=no 2>$null) |
+        Where-Object { $_ -notmatch 'windows/flutter/(generated_plugin_registrant\.|generated_plugins\.cmake)' }
+    if ($Commit -and $dirty) { $Commit = "$Commit-dirty" }
 } catch { $Commit = "" }
 $BuildArgs += "--dart-define=XIUGOU_BUILD_TIME=$BuildTime"
 if ($Commit) { $BuildArgs += "--dart-define=XIUGOU_COMMIT=$Commit" }

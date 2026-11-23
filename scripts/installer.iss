@@ -1,4 +1,4 @@
-; Script generated for XiugouTV Windows x64 Installer
+﻿; Script generated for XiugouTV Windows x64 Installer
 #ifndef AppVersion
   #define AppVersion "1.2.0"
 #endif
