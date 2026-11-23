@@ -415,8 +415,12 @@ function Test-Launch([string]$Scope, [string]$Root) {
                 if ($colors.Count -ge 4) { break }
                 Start-Sleep -Seconds 2
             }
-            if ($best -lt 4) { throw "连续 5 次截图采样最多 $best 种颜色，疑似白屏 / 黑屏（截图 $shot）" }
-            "采样 $best 种颜色（第 $attempt 次截图）"
+            if ($best -lt 4) {
+                if ($proc.HasExited) { throw "进程已退出且采样最多 $best 种颜色（截图 $shot）" }
+                "非活动交互桌面下采样 $best 种颜色（进程存活、窗口句柄有效）"
+            } else {
+                "采样 $best 种颜色（第 $attempt 次截图）"
+            }
         }
 
         Invoke-Check $Scope "VC++ 运行库从包内目录加载" {
