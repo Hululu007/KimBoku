@@ -36,7 +36,7 @@ function Write-Fixture([string]$Root, [string]$RelativePath, [string]$Content = 
 # Explicit fixture inventory: retain native assets, arbitrary plugin DLLs, runtime
 # configuration, CA certificates, bytecode-only modules, and third-party legal files.
 $runtimeFiles = @(
-    'xiugou_tv.exe', 'flutter_windows.dll', 'libmpv-2.dll', 'libEGL.dll', 'libGLESv2.dll', 'd3dcompiler_47.dll',
+    'KimBoKu.exe', 'flutter_windows.dll', 'libmpv-2.dll', 'libEGL.dll', 'libGLESv2.dll', 'd3dcompiler_47.dll',
     'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll', 'new_feature_plugin.dll', 'dartjni.dll', 'native_assets.json',
     'data/app.so', 'data/icudtl.dat', 'data/flutter_assets/AssetManifest.bin', 'data/flutter_assets/FontManifest.json',
     'data/flutter_assets/NOTICES.Z', 'data/flutter_assets/fonts/MaterialIcons-Regular.otf',
@@ -64,7 +64,7 @@ foreach ($rel in $runtimeFiles) { Write-Fixture $source $rel }
 $generatedFiles = @(
     'user_data/desktop_window.json', 'user_data/webdav_connections.bin', 'user_data/private/never-copy.env',
     'logs/companion.log', 'cache/download.jar', '.xiugou_tv_companion/jars/private.jar',
-    'hs_err_pid123.log', 'replay_pid123.log', 'xiugou_tv.exe.dmp', 'companion/dist/companion.log',
+    'hs_err_pid123.log', 'replay_pid123.log', 'KimBoKu.exe.dmp', 'companion/dist/companion.log',
     'companion/dist/phpruntime/php_errors.log', 'companion/dist/pyshell/base/__pycache__/spider.cpython-314.pyc',
     'companion/dist/pyruntime/Lib/site-packages/pkg/__pycache__/cache.cpython-314.pyc',
     'companion/dist/pyshell/.pytest_cache/private-token', 'zlib.dll'

@@ -20,7 +20,7 @@ function Get-MdkEntries {
 
 function Get-PackageRequiredEntries([Alias('LocalMdkPreview')][switch]$IncludeMdk) {
     @(
-        'xiugou_tv.exe', 'flutter_windows.dll', 'libmpv-2.dll',
+        'KimBoKu.exe', 'flutter_windows.dll', 'libmpv-2.dll',
         'libEGL.dll', 'libGLESv2.dll', 'd3dcompiler_47.dll',
         'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll',
         'data/app.so', 'data/icudtl.dat',
@@ -66,7 +66,7 @@ function Get-PackagePathDisposition([string]$RelativePath, [bool]$IsDirectory) {
         if ($RelativePath -match '^(licenses|legal)(/.*)?$') { return 'Include' }
     } else {
         if ($RelativePath -like 'mdk/*' -and $RelativePath -in (Get-MdkEntries)) { return 'Include' }
-        if ($RelativePath -match '^(xiugou_tv\.exe|[^/]+\.dll|native_assets\.json)$' -or $RelativePath -match "^$license$") { return 'Include' }
+        if ($RelativePath -match '^((KimBoKu|xiugou_tv)\.exe|[^/]+\.dll|native_assets\.json)$' -or $RelativePath -match "^$license$") { return 'Include' }
         if ($RelativePath -match '^data/(app\.so|icudtl\.dat|flutter_assets/.+)$') { return 'Include' }
         if ($RelativePath -match '^companion/dist/[^/]+\.jar$' -or $RelativePath -match "^companion/dist/$license$") { return 'Include' }
         if ($RelativePath -match '^companion/dist/(lib-unidbg|noderuntime|phpruntime|pyshell|pyruntime)/.+$') { return 'Include' }

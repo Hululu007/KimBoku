@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/jacurtwong/KimBoku/releases/latest"><img src="https://img.shields.io/badge/平台-Windows%2010%2F11%20x64-0078D4?logo=windows" alt="平台"></a>
-  <a href="https://github.com/jacurtwong/KimBoku/releases/latest"><img src="https://img.shields.io/badge/版本-1.4.4-2ea44f" alt="版本"></a>
+  <a href="https://github.com/jacurtwong/KimBoku/releases/latest"><img src="https://img.shields.io/badge/版本-1.4.5-2ea44f" alt="版本"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/许可证-GPL--3.0-blue" alt="许可证"></a>
   <a href="https://github.com/jacurtwong/KimBoku/releases/latest"><img src="https://img.shields.io/github/downloads/jacurtwong/KimBoku/total?color=blueviolet" alt="下载统计"></a>
 </p>
@@ -75,7 +75,7 @@
 | 版本类型 | 文件名格式 | 适用场景 |
 | :--- | :--- | :--- |
 | **标准安装包** | `kimboku-windows-x64-v1.4.3-setup.exe` | 推荐普通用户使用，附带完整开始菜单与快捷方式，支持平滑覆盖升级 |
-| **便携绿色版** | `kimboku-windows-x64-v1.4.3-portable.zip` | 解压至任意具备写权限的目录即可直接运行 `xiugou_tv.exe`，不留系统注册痕迹 |
+| **便携绿色版** | `kimboku-windows-x64-v1.4.5-portable.zip` | 解压至任意具备写权限的目录即可直接运行 `KimBoKu.exe`，不留系统注册痕迹 |
 
 > **下载地址**：请前往 [GitHub Releases](https://github.com/jacurtwong/KimBoku/releases/latest) 获取最新发布产物。
 >

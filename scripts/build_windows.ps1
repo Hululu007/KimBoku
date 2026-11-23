@@ -68,9 +68,9 @@ if ($Version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$') {
 }
 
 # 0. 确认程序未在运行（Windows 会锁住 exe 导致链接失败，这是最常见的构建失败原因）
-$runningProcesses = Get-Process -Name "xiugou_tv" -ErrorAction SilentlyContinue
+$runningProcesses = Get-Process -Name "KimBoKu", "xiugou_tv" -ErrorAction SilentlyContinue
 if ($runningProcesses) {
-    throw "xiugou_tv.exe 正在运行 (PID: $($runningProcesses.Id -join ', '))，请先关闭程序再打包，避免构建链接失败。"
+    throw "KimBoKu.exe 正在运行 (PID: $($runningProcesses.Id -join ', '))，请先关闭程序再打包，避免构建链接失败。"
 }
 # 清理可能残留的伴侣服务（避免锁定 companion 下的 jar 导致清理失败）
 Get-Process -Name "java" -ErrorAction SilentlyContinue | Where-Object {
@@ -210,8 +210,8 @@ if ($LASTEXITCODE -ne 0) {
     Write-Error "flutter build windows --release failed."
 }
 
-if (-not (Test-Path -LiteralPath "$BuildOutputDir/xiugou_tv.exe" -PathType Leaf)) {
-    Write-Error "Build output executable not found at: $BuildOutputDir/xiugou_tv.exe"
+if (-not (Test-Path -LiteralPath "$BuildOutputDir/KimBoKu.exe" -PathType Leaf)) {
+    Write-Error "Build output executable not found at: $BuildOutputDir/KimBoKu.exe"
 }
 Assert-PackageClientConfig $clientConfig (Join-Path $BuildOutputDir 'data/app.so')
 
@@ -364,7 +364,7 @@ Copy-Item -LiteralPath $EmbeddedJre -Destination $TargetRuntimeDir -Recurse -For
 Write-Host "  [+] Bundled embedded JRE to release directory." -ForegroundColor Green
 
 # 3.3 VC++ 运行库应用本地部署（issue #2：用户机未装 vc_redist 时报缺 VCRUNTIME140_1.dll、打不开）。
-# xiugou_tv.exe 与各插件 DLL 以 /MD 链接 MSVCP140 / VCRUNTIME140 / VCRUNTIME140_1；Windows 先在 exe 目录
+# KimBoKu.exe 与各插件 DLL 以 /MD 链接 MSVCP140 / VCRUNTIME140 / VCRUNTIME140_1；Windows 先在 exe 目录
 # 找 DLL，因此随包放一份即可。来源优先取 VS 自带的可再发行目录（与编译器同版本），找不到才退回 System32。
 # 注意不要用 runtime/jre/bin 下的那份：版本 14.36 低于编译器，新编译器产物配旧 msvcp140 可能在加锁时崩溃。
 Write-Host "[3.3/5] Bundling VC++ runtime (app-local)..." -ForegroundColor Yellow

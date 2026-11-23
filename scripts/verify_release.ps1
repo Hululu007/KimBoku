@@ -264,11 +264,11 @@ function Test-PackageLayout([string]$Scope, [string]$Root, [switch]$Installed) {
         "无残留"
     }
 
-    Invoke-Check $Scope "PE 依赖闭包（从 xiugou_tv.exe 出发）" {
+    Invoke-Check $Scope "PE 依赖闭包（从 KimBoKu.exe 出发）" {
         $system32 = [Environment]::GetFolderPath('System')
         $queue = New-Object System.Collections.Generic.Queue[string]
         $seen = @{}
-        $queue.Enqueue("xiugou_tv.exe")
+        $queue.Enqueue("KimBoKu.exe")
         foreach ($dll in (Get-ChildItem -LiteralPath $Root -Filter '*.dll' -File)) { $queue.Enqueue($dll.Name) }
         $problems = @()
         while ($queue.Count -gt 0) {
@@ -319,7 +319,7 @@ function Test-VersionResource([string]$Scope, [string]$Path, [string[]]$Fields) 
 
 # Launch only disposable package copies; the shipped stage is never started.
 function Test-Launch([string]$Scope, [string]$Root) {
-    $exe = Join-Path $Root "xiugou_tv.exe"
+    $exe = Join-Path $Root "KimBoKu.exe"
     $workDir = Join-Path $SmokeRoot ("cwd-" + $Scope)
     New-Item -ItemType Directory -Path $workDir -Force | Out-Null
     $windowConfig = New-ReleaseWindowFixture -Root $Root -SmokeRoot $SmokeRoot
@@ -452,7 +452,7 @@ function Test-Launch([string]$Scope, [string]$Root) {
 
         Invoke-Check $Scope "无 hs_err / 新崩溃转储" {
             $junk = @(Get-ChildItem -LiteralPath $workDir, $Root -Recurse -Filter "hs_err_pid*.log" -File -ErrorAction SilentlyContinue)
-            $dumps = @(Get-ChildItem -LiteralPath $dumpDir -Filter "xiugou_tv.exe*.dmp" -File -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -ge $startedAt })
+            $dumps = @(Get-ChildItem -LiteralPath $dumpDir -Filter "KimBoKu.exe*.dmp" -File -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -ge $startedAt })
             if ($junk.Count -gt 0 -or $dumps.Count -gt 0) { throw "hs_err $($junk.Count) 个、崩溃转储 $($dumps.Count) 个" }
             "无"
         }
@@ -531,14 +531,14 @@ try {
             if ($backslash -gt 0) { throw "$backslash / $count 个条目用了反斜杠分隔（不符合 zip 规范，部分解压工具会把整条路径当文件名）" }
             "$count 个条目，已解压到 $zipRoot"
         }
-        if (Test-Path -LiteralPath (Join-Path $zipRoot "xiugou_tv.exe")) {
-            Test-VersionResource "便携包" (Join-Path $zipRoot "xiugou_tv.exe") @("FileVersion", "ProductVersion")
+        if (Test-Path -LiteralPath (Join-Path $zipRoot "KimBoKu.exe")) {
+            Test-VersionResource "便携包" (Join-Path $zipRoot "KimBoKu.exe") @("FileVersion", "ProductVersion")
             if (Test-PackageLayout "便携包" $zipRoot) {
                 Test-BundledJre "便携包" $zipRoot
                 Test-Launch "便携包" $zipRoot
             }
         } else {
-            Add-Result "便携包" "启动冒烟" $false "解压目录里没有 xiugou_tv.exe"
+            Add-Result "便携包" "启动冒烟" $false "解压目录里没有 KimBoKu.exe"
         }
     }
 
@@ -560,12 +560,12 @@ try {
                     "/DIR=`"$installRoot`"", "/LOG=`"$log`"")
                 if ($p.ExitCode -ne 0) { throw "安装程序退出码 $($p.ExitCode)（日志 $log）" }
                 Assert-ReleaseTestInstallOwner @(Get-ReleaseInstallRegistrations) $installRoot $ProtectedMachineRegistrations
-                if (-not (Test-Path -LiteralPath (Join-Path $installRoot "xiugou_tv.exe"))) { throw "安装后没有 xiugou_tv.exe（日志 $log）" }
+                if (-not (Test-Path -LiteralPath (Join-Path $installRoot "KimBoKu.exe"))) { throw "安装后没有 KimBoKu.exe（日志 $log）" }
                 $script:installedFlag = $true
                 "已安装到 $installRoot"
             }
             if ($script:installedFlag) {
-                Test-VersionResource "安装包" (Join-Path $installRoot "xiugou_tv.exe") @("FileVersion", "ProductVersion")
+                Test-VersionResource "安装包" (Join-Path $installRoot "KimBoKu.exe") @("FileVersion", "ProductVersion")
                 if (Test-PackageLayout "安装包" $installRoot -Installed) {
                     Test-BundledJre "安装包" $installRoot
                     Test-Launch "安装包" $installRoot

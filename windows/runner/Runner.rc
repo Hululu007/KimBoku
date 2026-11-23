@@ -92,9 +92,9 @@ BEGIN
             VALUE "CompanyName", "KimBoKu" "\0"
             VALUE "FileDescription", "KimBoKu" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "xiugou_tv" "\0"
+            VALUE "InternalName", "KimBoKu" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 KimBoKu. All rights reserved." "\0"
-            VALUE "OriginalFilename", "xiugou_tv.exe" "\0"
+            VALUE "OriginalFilename", "KimBoKu.exe" "\0"
             VALUE "ProductName", "KimBoKu" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END

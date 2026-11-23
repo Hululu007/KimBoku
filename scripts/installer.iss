@@ -1,6 +1,6 @@
 ﻿; Script generated for XiugouTV Windows x64 Installer
 #ifndef AppVersion
-  #define AppVersion "1.4.4"
+  #define AppVersion "1.4.5"
 #endif
 #ifndef SourceDir
   #error SourceDir must be the clean application stage created by scripts/package_tree.ps1
@@ -38,7 +38,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
 SetupIconFile=..\windows\runner\resources\app_icon.ico
-UninstallDisplayIcon={app}\xiugou_tv.exe
+UninstallDisplayIcon={app}\KimBoKu.exe
 
 [Languages]
 ; Inno Setup 6 自带英文消息文件为安装根目录的 Default.isl；Languages\ 目录只放第三方语言包，
@@ -53,9 +53,9 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 #include PackageFilesInclude
 
 [Icons]
-Name: "{group}\XiugouTV"; Filename: "{app}\xiugou_tv.exe"
-Name: "{group}\{cm:UninstallProgram,XiugouTV}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\XiugouTV"; Filename: "{app}\xiugou_tv.exe"; Tasks: desktopicon
+Name: "{group}\KimBoKu"; Filename: "{app}\KimBoKu.exe"
+Name: "{group}\{cm:UninstallProgram,KimBoKu}"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\KimBoKu"; Filename: "{app}\KimBoKu.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\xiugou_tv.exe"; Description: "{cm:LaunchProgram,XiugouTV}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\KimBoKu.exe"; Description: "{cm:LaunchProgram,KimBoKu}"; Flags: nowait postinstall skipifsilent
