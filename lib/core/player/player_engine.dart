@@ -79,4 +79,9 @@ abstract class PlayerEngine {
   ///
   /// 播放器的「广告调试」面板读这个值解释「剪了几段 / 为什么没剪」。
   ValueListenable<AdFilterDebugInfo?> get adFilterDebug;
+
+  /// 从底层播放器读取瞬时下载速度（字节/秒）；不支持或空闲时返回 null。
+  ///
+  /// OSD 浮层必须以此为准；取不到就只显示缓冲秒数，严禁伪造数字。
+  Future<double?> readNetworkSpeed() async => null;
 }

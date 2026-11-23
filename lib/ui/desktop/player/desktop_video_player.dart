@@ -19,6 +19,8 @@ import '../../../core/segments/segment_models.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_tokens.dart';
 import '../keyboard/player_shortcuts.dart';
+import 'ad_debug_panel.dart';
+import 'playback_info_osd.dart';
 import 'danmaku_layer.dart';
 import 'danmaku_search_dialog.dart';
 import 'danmaku_settings_panel.dart';
@@ -581,6 +583,12 @@ class _DesktopVideoPlayerState extends State<DesktopVideoPlayer> {
   bool _channelWheelUp = false;
   VoidCallback? _refreshSettingsPanel;
   bool _loadingLocalSubtitle = false;
+
+  /// §AD 广告调试面板（D 键开关）：只读半透明卡片，鼠标穿透。
+  bool _showAdDebug = false;
+
+  /// §OSD 播放信息层（I 键开关）：四角只读信息，鼠标穿透。
+  bool _showInfoOsd = false;
 
   bool get _drawerOrPanelOpen =>
       _episodeDrawerOpen ||
@@ -1261,6 +1269,20 @@ class _DesktopVideoPlayerState extends State<DesktopVideoPlayer> {
     _onUserActivity();
   }
 
+  /// §AD 广告调试面板开关（默认 D 键）。给一条 OSD 提示，避免"按了没反应"。
+  void _toggleAdDebug() {
+    setState(() => _showAdDebug = !_showAdDebug);
+    _osdController.show(Icons.bug_report_outlined,
+        _showAdDebug ? '广告调试' : '已关闭广告调试');
+  }
+
+  /// §OSD 播放信息层开关（默认 I 键）。
+  void _toggleInfoOsd() {
+    setState(() => _showInfoOsd = !_showInfoOsd);
+    _osdController.show(Icons.info_outline_rounded,
+        _showInfoOsd ? '播放信息' : '已关闭播放信息');
+  }
+
   void _handleExit() {
     // §39：准备态（解析中 / 失败）优先取消，Esc 与返回键随时可用。
     if (widget.preparing != null) {
@@ -1493,6 +1515,10 @@ class _DesktopVideoPlayerState extends State<DesktopVideoPlayer> {
               onInvoke: (_) => _handleNextEpisode()),
           ToggleDanmakuIntent: CallbackAction<ToggleDanmakuIntent>(
               onInvoke: (_) => _handleToggleDanmaku()),
+          ToggleAdDebugIntent: CallbackAction<ToggleAdDebugIntent>(
+              onInvoke: (_) => _toggleAdDebug()),
+          ToggleInfoOsdIntent: CallbackAction<ToggleInfoOsdIntent>(
+              onInvoke: (_) => _toggleInfoOsd()),
         },
         child: Focus(
           focusNode: _focusNode,
@@ -1777,6 +1803,25 @@ class _DesktopVideoPlayerState extends State<DesktopVideoPlayer> {
                   ),
                   ),
                 ),
+
+                // 7.4 §OSD 播放信息（I 键）：四角只读信息，IgnorePointer 不挡交互。
+                if (_showInfoOsd)
+                  Positioned.fill(
+                    child: PlaybackInfoOsd(
+                      engine: widget.playerEngine,
+                      fallbackTitle: widget.playerInfoLabel,
+                    ),
+                  ),
+
+                // 7.5 §AD 广告调试面板（D 键）：浮在右上角，鼠标穿透。
+                if (_showAdDebug)
+                  Positioned(
+                    top: 56,
+                    right: 16,
+                    child: AdDebugPanel(
+                      engine: widget.playerEngine,
+                    ),
+                  ),
 
                 // 8. 起播准备态（§16）：解析地址期间盖在最上层。
                 //    没有它时，弱网下点选集要干等几秒才进播放页。

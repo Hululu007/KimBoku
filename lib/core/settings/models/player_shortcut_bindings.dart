@@ -14,7 +14,9 @@ enum PlayerShortcutAction {
   rateReset('恢复 1 倍速'),
   previousEpisode('上一集'),
   nextEpisode('下一集'),
-  toggleDanmaku('显示 / 隐藏弹幕');
+  toggleDanmaku('显示 / 隐藏弹幕'),
+  infoOsd('显示 / 隐藏播放信息 OSD'),
+  adDebug('广告调试面板（剪辑结果）');
 
   final String label;
   const PlayerShortcutAction(this.label);
@@ -156,7 +158,11 @@ class PlayerShortcutBindings {
     PlayerShortcutAction.rateReset: [PlayerKeyBinding('keyZ')],
     PlayerShortcutAction.previousEpisode: [PlayerKeyBinding('pageUp')],
     PlayerShortcutAction.nextEpisode: [PlayerKeyBinding('pageDown')],
-    PlayerShortcutAction.toggleDanmaku: [PlayerKeyBinding('keyD')],
+    PlayerShortcutAction.toggleDanmaku: [PlayerKeyBinding('keyB')],
+    // I：播放信息 OSD（标题 / 分辨率 / 时间 / 进度 / 速度与缓冲）。
+    PlayerShortcutAction.infoOsd: [PlayerKeyBinding('keyI')],
+    // D 让给「广告调试」（与 KimBoxPC 一致），弹幕默认改到 B。
+    PlayerShortcutAction.adDebug: [PlayerKeyBinding('keyD')],
   });
 
   List<PlayerKeyBinding> keysFor(PlayerShortcutAction action) =>
@@ -248,6 +254,11 @@ class PlayerShortcutBindings {
           if (binding == null) return defaults;
           keys.add(binding);
         }
+      }
+      // 旧配置里若「弹幕 = D」，判定为「一键两用」并整体回落到新默认键。
+      if (action == PlayerShortcutAction.toggleDanmaku &&
+          keys.any((b) => b.key == 'keyD' && !b.control && !b.alt && !b.shift)) {
+        return defaults;
       }
       for (final binding in keys) {
         if (_reservedReason(action, binding) != null || !seen.add(binding)) {

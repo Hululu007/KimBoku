@@ -73,16 +73,19 @@ class HlsAdCut {
     required this.start,
     required this.end,
     required this.placement,
+    this.segments = 0,
   });
 
   final double start;
   final double end;
   final HlsAdPlacement placement;
+  final int segments;
 
   double get duration => end - start;
 
   @override
-  String toString() => '${start.toStringAsFixed(1)}s-${end.toStringAsFixed(1)}s';
+  String toString() => '${start.toStringAsFixed(1)}s-${end.toStringAsFixed(1)}s'
+      '${segments > 0 ? '($segments片)' : ''}';
 }
 
 /// 一次分析的结果。位置信息只用于诊断与日志，剪辑不依赖它。
@@ -311,6 +314,7 @@ HlsAdAnalysis analyzeAdBlocks(String text) {
         start: blockStarts[entry.key],
         end: blockStarts[entry.key] + infos[entry.key].duration,
         placement: entry.value,
+        segments: infos[entry.key].segments,
       ),
   ]..sort((a, b) => a.start.compareTo(b.start));
 
@@ -367,6 +371,7 @@ HlsCutPlaylist buildCutPlaylist(String text, HlsAdAnalysis analysis) {
         start: start,
         end: cursor,
         placement: analysis.blocks[index].placement ?? HlsAdPlacement.middle,
+        segments: analysis.blocks[index].segments,
       ));
       removed += duration;
       // 第 0 块被整体删掉时，表头（#EXTM3U / 版本 / TARGETDURATION…）仍要保留。

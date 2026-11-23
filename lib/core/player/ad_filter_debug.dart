@@ -114,6 +114,7 @@ class AdFilterDebugInfo {
         final cut = cuts[i];
         buffer.writeln('  #${i + 1} ${_durationText(cut.start)}'
             ' – ${_durationText(cut.end)}（${cut.duration.toStringAsFixed(1)}s'
+            '${cut.segments > 0 ? '，${cut.segments}片' : ''}'
             '${cut.placement == HlsAdPlacement.tail ? '，片尾' : cut.placement == HlsAdPlacement.head ? '，片头' : ''}）');
       }
     }

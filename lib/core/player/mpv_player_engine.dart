@@ -75,6 +75,21 @@ class MpvPlayerEngine
   @override
   ValueListenable<AdFilterDebugInfo?> get adFilterDebug => _adFilterDebug;
 
+  @override
+  Future<double?> readNetworkSpeed() async {
+    if (_disposed || !_mpvOwnsPlayback) return null;
+    final platform = _player.platform;
+    if (platform is! NativePlayer) return null;
+    try {
+      final value = double.tryParse(await platform.getProperty('cache-speed'));
+      if (value == null || !value.isFinite || value <= 0) return null;
+      return value;
+    } catch (_) {
+      // 老版本 mpv 没有 cache-speed：OSD 只显示缓冲，不编造速度。
+      return null;
+    }
+  }
+
   Future<bool> selectPlaybackBackend(NativePlaybackBackend? backend,
       {EmbeddedPlaybackChannel channel = const EmbeddedPlaybackChannel()}) =>
       _selectBackend(backend, channel);
@@ -868,6 +883,7 @@ class MpvPlayerEngine
     _currentSpec = spec;
     _softRetrySpec = null;
     _currentError = null;
+    _adFilterDebug.value = null; // 换集 / 换片时清空上一集的广告分析调试信息
     _errorController.add(null);
     _resetMediaEvidence();
     // 每次新播放会话重置诊断日志，避免上一部片的日志混进本次错误诊断。
@@ -900,6 +916,7 @@ class MpvPlayerEngine
     _currentSpec = spec;
     _softRetrySpec = null;
     _currentError = null;
+    _adFilterDebug.value = null; // 换集 / 换片时清空上一集的广告分析调试信息
     _errorController.add(null);
     _resetMediaEvidence();
     _recentLogs.add('[source-switch] 保留倍速、音量和暂停状态');
