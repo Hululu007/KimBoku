@@ -38,6 +38,7 @@ class AppDataFile {
 /// 应用数据目录中的持久化文件；新增文件须在此登记。
 const List<AppDataFile> appDataFiles = [
   AppDataFile('appearance_preferences.json', AppDataCategory.appearance),
+  AppDataFile('Category_filter.json', AppDataCategory.preference),
   AppDataFile('cached_vod_config.json', AppDataCategory.configSnapshot, sensitive: true),
   // 配置源目录 v1：entries + 独立 categories（含空分类）；兼容旧版数组。
   AppDataFile('config_sources.json', AppDataCategory.configSource, sensitive: true),

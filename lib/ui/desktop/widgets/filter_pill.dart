@@ -74,7 +74,6 @@ class _FilterPillState extends State<FilterPill> {
                     ]
                   : null,
             ),
-            alignment: Alignment.center,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -125,4 +124,133 @@ class _FilterPillState extends State<FilterPill> {
       ),
     );
   }
+}
+
+/// 虚线胶囊按钮：用于折叠列表末尾的「展开全部 N 个」与「收起」。
+class DashedPill extends StatefulWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const DashedPill({
+    super.key,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  State<DashedPill> createState() => _DashedPillState();
+}
+
+class _DashedPillState extends State<DashedPill> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final borderColor = _isHovered
+        ? palette.accentInk
+        : palette.accentInk.withValues(alpha: 0.5);
+
+    return FocusRing(
+      onTap: widget.onTap,
+      semanticLabel: widget.label,
+      borderRadius: const BorderRadius.all(Radius.circular(AppRadii.pill)),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: CustomPaint(
+            painter: DashedRRectPainter(
+              color: borderColor,
+              strokeWidth: 1.0,
+              dash: 4.0,
+              gap: 3.0,
+              radius: AppRadii.pill,
+            ),
+            child: AnimatedContainer(
+              duration: _isHovered ? AppMotion.enter : AppMotion.exit,
+              curve: AppMotion.ease,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              decoration: BoxDecoration(
+                color: _isHovered ? palette.accentWash : Colors.transparent,
+                borderRadius: BorderRadius.circular(AppRadii.pill),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    widget.label,
+                    style: TextStyle(
+                      fontSize: AppType.body,
+                      fontWeight: FontWeight.w500,
+                      color: _isHovered ? palette.accentInk : palette.textSub,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 绘制圆角矩形虚线边框
+class DashedRRectPainter extends CustomPainter {
+  final Color color;
+  final double strokeWidth;
+  final double dash;
+  final double gap;
+  final double radius;
+
+  const DashedRRectPainter({
+    required this.color,
+    this.strokeWidth = 1.0,
+    this.dash = 4.0,
+    this.gap = 3.0,
+    this.radius = AppRadii.pill,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke;
+
+    final rrect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(
+        strokeWidth / 2,
+        strokeWidth / 2,
+        size.width - strokeWidth,
+        size.height - strokeWidth,
+      ),
+      Radius.circular(radius),
+    );
+
+    final path = Path()..addRRect(rrect);
+    final metrics = path.computeMetrics();
+
+    for (final metric in metrics) {
+      double distance = 0.0;
+      while (distance < metric.length) {
+        final len = (distance + dash < metric.length) ? dash : metric.length - distance;
+        final extract = metric.extractPath(distance, distance + len);
+        canvas.drawPath(extract, paint);
+        distance += dash + gap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant DashedRRectPainter oldDelegate) =>
+      color != oldDelegate.color ||
+      strokeWidth != oldDelegate.strokeWidth ||
+      dash != oldDelegate.dash ||
+      gap != oldDelegate.gap ||
+      radius != oldDelegate.radius;
 }

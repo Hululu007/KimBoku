@@ -88,6 +88,8 @@ import 'ui/desktop/catalog/douban_poster_image.dart';
 import 'ui/desktop/catalog/poster_image.dart';
 import 'ui/desktop/catalog/rating_pick_button.dart';
 import 'ui/desktop/catalog/site_information_dialog.dart';
+import 'core/category/category_filter_service.dart';
+import 'ui/desktop/widgets/collapsible_category_bar.dart';
 import 'ui/desktop/catalog/vod_detail_dialog.dart';
 import 'ui/desktop/catalog/vod_grid_view.dart';
 import 'ui/desktop/catalog/vod_grid_skeleton.dart';
@@ -117,9 +119,7 @@ import 'ui/desktop/shell/desktop_sidebar.dart';
 import 'ui/desktop/widgets/app_message.dart';
 import 'ui/desktop/widgets/desktop_window_frame.dart';
 import 'ui/desktop/widgets/dialog_drag_strip.dart';
-import 'ui/desktop/widgets/filter_pill.dart';
 import 'ui/desktop/widgets/home_search_bar_host.dart';
-import 'ui/desktop/widgets/horizontal_scroll_area.dart';
 import 'ui/desktop/window/desktop_window_manager.dart';
 import 'ui/theme/app_palette.dart';
 import 'ui/theme/app_tokens.dart';
@@ -258,6 +258,12 @@ Future<void> showUpdateDialog(BuildContext context) => showAppDialog<void>(
       barrierDismissible: false,
       builder: (_) => const _UpdateDialogHost(),
     );
+
+final categoryFilterServiceProvider = Provider<CategoryFilterService>((ref) {
+  final service = CategoryFilterService();
+  unawaited(service.load());
+  return service;
+});
 
 final cmsApiProvider = Provider<CmsJsonApi>((ref) => CmsJsonApi());
 final tmdbRepositoryProvider = Provider<TmdbRepository>((ref) {
@@ -3935,6 +3941,8 @@ class XiugouTvApp extends ConsumerWidget {
                             dataBackupService:
                                 ref.read(dataBackupServiceProvider),
                             wallpaperStore: ref.read(wallpaperStoreProvider),
+                            categoryFilterService:
+                                ref.read(categoryFilterServiceProvider),
                             isPlaybackActive: () =>
                                 ref.read(activePlaySpecProvider) != null,
                             updateSection: (buildInfo) =>
@@ -5373,21 +5381,47 @@ class _DesktopMainViewState extends ConsumerState<DesktopMainView> {
           ref.read(homeSiteIconProvider.notifier).state =
               (identity: identity, icon: homeRes.siteIcon);
         }
-        final fetchedCats = homeRes.categories;
+        final filterService = ref.read(categoryFilterServiceProvider);
+        // 1. 配置白名单优先匹配（精确同名 -> 互相包含 -> 全不匹配回退）
+        var processedCats =
+            filterService.applyConfigCategories(site.categories, homeRes.categories);
+        // 2. 自动模式过滤（spider 站不过滤）
+        processedCats =
+            filterService.filterAutoCategoriesForSite(site, processedCats);
+        // 3. 过滤已缓存的空分类
+        processedCats =
+            filterService.filterProbedEmptyCategories(site, processedCats);
 
         // ignore: avoid_print
         print(
-            '--> [站源返回分类数]: ${fetchedCats.length} 个 -> [ ${fetchedCats.map((c) => "${c.name}(${c.id})").join(", ")} ]');
+            '--> [站源处理后分类数]: ${processedCats.length} 个 -> [ ${processedCats.map((c) => "${c.name}(${c.id})").join(", ")} ]');
 
-        if (fetchedCats.isNotEmpty) {
-          final firstCat = fetchedCats.first;
+        if (processedCats.isNotEmpty) {
+          final firstCat = processedCats.first;
           if (mounted) {
             setState(() {
-              _categories = fetchedCats;
+              _categories = processedCats;
               _selectedCategory = firstCat;
               _siteFilters = homeRes.filters;
             });
           }
+
+          // 4. 后台探测空分类（仅对 CMS/JSON 站生效，并发 3，上限 40，探测结果落盘 Category_filter.json）
+          unawaited(filterService.probeEmptyCategoriesInBackground(
+            site: site,
+            categories: processedCats,
+            selectedCategory: firstCat,
+            siteApi: siteApi,
+            onEmptyDetected: (emptyIds) {
+              if (mounted && _acceptContent(generation, identity)) {
+                setState(() {
+                  _categories = _categories
+                      .where((c) => !emptyIds.contains(c.id))
+                      .toList();
+                });
+              }
+            },
+          ));
 
           // 默认加载站源第 1 个分类的数据
           if (firstCat.id.isNotEmpty) {
@@ -6886,67 +6920,29 @@ class _DesktopMainViewState extends ConsumerState<DesktopMainView> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Expanded(
-                                          child: Container(
-                                            height: 38,
-                                            padding: const EdgeInsets.symmetric(
-                                                vertical: 2),
-                                            // 分类多时鼠标滚轮 / 按住拖动都能横向滚动（§41）。
-                                            child: HorizontalScrollArea(
-                                              controller:
-                                                  _categoryScrollController,
-                                              child: ListView.separated(
-                                                key: const ValueKey(
-                                                    'category-bar'),
-                                                controller:
-                                                    _categoryScrollController,
-                                                scrollDirection:
-                                                    Axis.horizontal,
-                                                itemCount: _categories.length +
-                                                    (_isDoubanHome &&
-                                                            _doubanViewingSingleCategory
-                                                        ? 1
-                                                        : 0),
-                                                separatorBuilder: (_, __) =>
-                                                    const SizedBox(width: 8),
-                                                itemBuilder: (context, index) {
-                                                  if (_isDoubanHome &&
-                                                      _doubanViewingSingleCategory) {
-                                                    if (index == 0) {
-                                                      return FilterPill(
-                                                        label: '◀ 返回推荐大厅',
-                                                        isSelected: false,
-                                                        onTap: () {
-                                                          setState(() {
-                                                            _doubanViewingSingleCategory =
-                                                                false;
-                                                          });
-                                                        },
-                                                      );
-                                                    }
-                                                    index -= 1;
-                                                  }
-                                                  final cat =
-                                                      _categories[index];
-                                                  final isSelected =
-                                                      _selectedCategory?.id ==
-                                                          cat.id;
-
-                                                  return FilterPill(
-                                                    label: cat.name,
-                                                    isSelected: isSelected,
-                                                    onTap: () {
-                                                      _searchController.clear();
-                                                      loadSiteData(
-                                                          category: cat,
-                                                          preserveCategories:
-                                                              true);
-                                                    },
-                                                  );
-                                                },
-                                              ),
-                                            ),
+                                          child: CollapsibleCategoryBar(
+                                            key: const ValueKey('category-bar'),
+                                            categories: _categories,
+                                            selectedCategory: _selectedCategory,
+                                            isDoubanViewingSingleCategory:
+                                                _isDoubanHome &&
+                                                    _doubanViewingSingleCategory,
+                                            onReturnToDoubanHall: () {
+                                              setState(() {
+                                                _doubanViewingSingleCategory =
+                                                    false;
+                                              });
+                                            },
+                                            onSelectCategory: (cat) {
+                                              _searchController.clear();
+                                              loadSiteData(
+                                                  category: cat,
+                                                  preserveCategories: true);
+                                            },
                                           ),
                                         ),
                                         // 当前分类声明了筛选时，分类条右侧给折叠开关（待办第 20 条）。

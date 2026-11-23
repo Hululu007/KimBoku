@@ -33,6 +33,8 @@ import '../../../core/settings/models/play_skip_preferences.dart';
 import '../../../core/settings/wallpaper_store.dart';
 import '../../../core/storage/cache_maintenance.dart';
 import '../../../core/storage/data_backup_service.dart';
+import '../../../core/category/category_filter_service.dart';
+import '../dialogs/category_filter_dialog.dart';
 import '../../../core/storage/data_directory_manager.dart';
 import '../../../core/storage/data_restore_guard.dart';
 import '../../../core/storage/models/data_backup.dart';
@@ -133,6 +135,9 @@ class SettingsPage extends StatefulWidget {
   /// 独立直播源（「直播源」分区）；缺省不显示该分区。
   final LiveRepository? liveRepository;
 
+  /// 分类过滤服务（可注入以便测试）
+  final CategoryFilterService? categoryFilterService;
+
   const SettingsPage({
     super.key,
     required this.configRepository,
@@ -157,6 +162,7 @@ class SettingsPage extends StatefulWidget {
     this.danmakuAvailable,
     this.companionSpiderApi,
     this.liveRepository,
+    this.categoryFilterService,
   });
 
   @override
@@ -262,6 +268,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                 pickBackupSavePath: widget.pickBackupSavePath,
                                 pickBackupOpenPath: widget.pickBackupOpenPath,
                                 companionSpiderApi: widget.companionSpiderApi,
+                                categoryFilterService: widget.categoryFilterService,
                               ),
                             SettingsSection.appearance => AppearancePanel(
                                 key: const ValueKey('settings-appearance'),
@@ -3241,6 +3248,7 @@ class GeneralSettingsPanel extends StatelessWidget {
   final Future<String?> Function(String suggestedName)? pickBackupSavePath;
   final Future<String?> Function()? pickBackupOpenPath;
   final CompanionSpiderApi? companionSpiderApi;
+  final CategoryFilterService? categoryFilterService;
 
   const GeneralSettingsPanel({
     super.key,
@@ -3253,7 +3261,21 @@ class GeneralSettingsPanel extends StatelessWidget {
     this.pickBackupSavePath,
     this.pickBackupOpenPath,
     this.companionSpiderApi,
+    this.categoryFilterService,
   });
+
+  Future<void> _editCategoryFilterKeywords(BuildContext context) async {
+    final service = categoryFilterService ?? CategoryFilterService();
+    await service.load();
+    if (!context.mounted) return;
+    final saved = await showAppDialog<bool>(
+      context: context,
+      builder: (_) => CategoryFilterKeywordsDialog(service: service),
+    );
+    if (saved == true && context.mounted) {
+      showAppMessage('分类过滤关键字已保存', type: AppMessageType.success);
+    }
+  }
 
   Future<void> _setNextEntry(StartupEntry entry) {
     final repository = settingsRepository;
@@ -3561,6 +3583,20 @@ class GeneralSettingsPanel extends StatelessWidget {
                 ),
               );
             },
+          ),
+        ),
+        const SizedBox(height: 16),
+        _card(
+          context,
+          child: _SettingRow(
+            title: '分类过滤关键字',
+            description: '自动模式下按分类名称精确隐藏（体育、伦理、大目录等）；spider 爬虫站不参与。',
+            trailing: OutlinedButton.icon(
+              key: const ValueKey('category-filter-keywords-button'),
+              onPressed: () => unawaited(_editCategoryFilterKeywords(context)),
+              icon: const Icon(Icons.filter_list_rounded, size: 18),
+              label: const Text('管理关键字'),
+            ),
           ),
         ),
         const SizedBox(height: 16),

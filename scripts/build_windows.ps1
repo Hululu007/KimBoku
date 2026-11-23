@@ -72,6 +72,10 @@ $runningProcesses = Get-Process -Name "xiugou_tv" -ErrorAction SilentlyContinue
 if ($runningProcesses) {
     throw "xiugou_tv.exe 正在运行 (PID: $($runningProcesses.Id -join ', '))，请先关闭程序再打包，避免构建链接失败。"
 }
+# 清理可能残留的伴侣服务（避免锁定 companion 下的 jar 导致清理失败）
+Get-Process -Name "java" -ErrorAction SilentlyContinue | Where-Object {
+    $_.Path -and ($_.Path -replace '\\', '/').StartsWith(($BuildOutputDir -replace '\\', '/'), [System.StringComparison]::OrdinalIgnoreCase)
+} | Stop-Process -Force -ErrorAction SilentlyContinue
 
 # 校验版本号三处一致：pubspec.yaml / scripts/installer.iss 兜底常量 / README.md 徽章
 $issPath = Join-Path $ProjectRoot "scripts/installer.iss"

@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/jacurtwong/KimBoku/releases/latest"><img src="https://img.shields.io/badge/平台-Windows%2010%2F11%20x64-0078D4?logo=windows" alt="平台"></a>
-  <a href="https://github.com/jacurtwong/KimBoku/releases/latest"><img src="https://img.shields.io/badge/版本-1.4.2-2ea44f" alt="版本"></a>
+  <a href="https://github.com/jacurtwong/KimBoku/releases/latest"><img src="https://img.shields.io/badge/版本-1.4.3-2ea44f" alt="版本"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/许可证-GPL--3.0-blue" alt="许可证"></a>
   <a href="https://github.com/jacurtwong/KimBoku/releases/latest"><img src="https://img.shields.io/github/downloads/jacurtwong/KimBoku/total?color=blueviolet" alt="下载统计"></a>
 </p>
@@ -74,8 +74,8 @@
 
 | 版本类型 | 文件名格式 | 适用场景 |
 | :--- | :--- | :--- |
-| **标准安装包** | `kimboku-windows-x64-v1.4.2-setup.exe` | 推荐普通用户使用，附带完整开始菜单与快捷方式，支持平滑覆盖升级 |
-| **便携绿色版** | `kimboku-windows-x64-v1.4.2-portable.zip` | 解压至任意具备写权限的目录即可直接运行 `xiugou_tv.exe`，不留系统注册痕迹 |
+| **标准安装包** | `kimboku-windows-x64-v1.4.3-setup.exe` | 推荐普通用户使用，附带完整开始菜单与快捷方式，支持平滑覆盖升级 |
+| **便携绿色版** | `kimboku-windows-x64-v1.4.3-portable.zip` | 解压至任意具备写权限的目录即可直接运行 `xiugou_tv.exe`，不留系统注册痕迹 |
 
 > **下载地址**：请前往 [GitHub Releases](https://github.com/jacurtwong/KimBoku/releases/latest) 获取最新发布产物。
 >
@@ -130,6 +130,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
 
 ## 📜 鸣谢与生态开源
 
+- 本项目修改来自开源仓库 [qfw66/xiugou-tv](https://github.com/qfw66/xiugou-tv)，在此对其作者与贡献者表达诚挚感谢。
 - 本项目的播放内核深度依托于 [media_kit](https://github.com/media-kit/media-kit)（基于卓越的 libmpv 开源多媒体套件）。
 - 影视配置与插件兼容规范参考并吸纳了 FongMi（[FongMi/TV](https://github.com/FongMi/TV)）以及 TVBox / CatVod 开放社区的长期实践，特此致敬所有无私奉献的开源作者。
 - 更多第三方组件及其遵循的许可证说明，请详见安装目录下的 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。
