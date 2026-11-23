@@ -81,10 +81,14 @@ class _CinematicVodPageState extends State<_CinematicVodPage> {
           current.index < s.episodes.length &&
           s.episodes[current.index].name == current.episodeName,
     );
-    final firstPlayable = _sources.indexWhere((s) => s.episodes.isNotEmpty);
+    final defaultIndex = findPreferredLineIndex(_sources);
+    final historyIdx = widget.history?.sourceIndex;
+    final validHistoryIndex = (historyIdx != null && historyIdx >= 0 && historyIdx < _sources.length)
+        ? historyIdx
+        : null;
     _source = currentLine >= 0
         ? currentLine
-        : (widget.history?.sourceIndex ?? math.max(0, firstPlayable));
+        : (validHistoryIndex ?? defaultIndex);
     if (_sources.isNotEmpty) _page = (_resumeIndex(_source) ?? 0) ~/ _perPage;
   }
 

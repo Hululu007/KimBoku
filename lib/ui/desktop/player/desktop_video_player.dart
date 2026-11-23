@@ -997,18 +997,23 @@ class _DesktopVideoPlayerState extends State<DesktopVideoPlayer> {
   }
 
   /// §20：工具栏按钮开关右侧选集抽屉。
-  void _toggleEpisodeDrawer() {
+  void _openEpisodeDrawer() {
     if (widget.episodeListNav == null) return;
-    if (_episodeDrawerOpen) {
-      _closeEpisodeDrawer();
-      return;
-    }
     _holdGesture.cancel();
     _hideControlsTimer?.cancel();
     setState(() {
       _showControls = true;
       _episodeDrawerOpen = true;
     });
+  }
+
+  void _toggleEpisodeDrawer() {
+    if (widget.episodeListNav == null) return;
+    if (_episodeDrawerOpen) {
+      _closeEpisodeDrawer();
+      return;
+    }
+    _openEpisodeDrawer();
   }
 
   void _closeEpisodeDrawer() {
@@ -1820,6 +1825,7 @@ class _DesktopVideoPlayerState extends State<DesktopVideoPlayer> {
                     right: 16,
                     child: AdDebugPanel(
                       engine: widget.playerEngine,
+                      onClose: () => setState(() => _showAdDebug = false),
                     ),
                   ),
 
@@ -2897,7 +2903,11 @@ class _DesktopVideoPlayerState extends State<DesktopVideoPlayer> {
           final current = widget.sourceSwitchNav;
           if (current == null || !current.enabled || current.busy) return;
           Navigator.of(context).pop();
-          current.onSearch();
+          if (widget.episodeListNav != null) {
+            _openEpisodeDrawer();
+          } else {
+            current.onSearch();
+          }
         },
       ));
       if (sourceNav.busy && sourceNav.onCancel != null) {

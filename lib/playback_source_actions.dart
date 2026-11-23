@@ -25,6 +25,15 @@ final playbackQualityPreferencesProvider =
   return const {};
 });
 
+final crossSiteSourceManagerProvider = Provider<CrossSiteSourceManager>((ref) {
+  final manager = CrossSiteSourceManager(
+    searchEngine: ref.read(searchEngineProvider),
+    siteApi: ref.read(siteApiProvider),
+  );
+  ref.onDispose(manager.dispose);
+  return manager;
+});
+
 final switchPlaybackQualityProvider = Provider<Future<void> Function(int)>(
     (ref) => (index) => _switchPlaybackQuality(ref, index));
 
@@ -483,9 +492,10 @@ Future<void> _switchPlaybackSource(
     final continuing =
         identical(session, ref.read(activePlaybackSessionProvider));
     final position = continuing ? snapshot.position : Duration.zero;
+    final sourceLabel = formatSourceAndLine(candidate.site.name, candidate.source.name);
     target = target.copyWith(
         title:
-            '${candidate.item.name} - ${candidate.episodeName} (${candidate.source.name})',
+            '${candidate.item.name} - ${candidate.episodeName} ($sourceLabel)',
         startPosition: position);
     final tracker = ref.read(playbackHistoryTrackerProvider);
     await tracker.flush();
@@ -588,4 +598,141 @@ Future<CrossSiteCandidate?> _choosePlaybackSource(BuildContext context,
     if (route.isActive) navigator.removeRoute(route);
   });
   return navigator.push(route);
+}
+
+void _ensureSeekAfterSwitch(
+  MpvPlayerEngine engine,
+  MediaPlaySpec spec,
+  Duration targetPosition,
+) {
+  if (targetPosition <= const Duration(seconds: 1)) return;
+  StreamSubscription? sub;
+  Timer? timeout;
+  var handled = false;
+
+  void cleanup() {
+    sub?.cancel();
+    timeout?.cancel();
+  }
+
+  void checkAndSeek(Duration currentPos) {
+    if (handled) return;
+    if (!identical(engine.currentSpec, spec)) {
+      cleanup();
+      return;
+    }
+    // 当起播已建立，若位置落后目标进度超过 2 秒，主动执行一次 seek 补位
+    if (currentPos < targetPosition - const Duration(seconds: 2)) {
+      handled = true;
+      cleanup();
+      unawaited(engine.seek(targetPosition));
+    } else if (currentPos >= targetPosition - const Duration(seconds: 2)) {
+      // 已经由 mpv 的 start 参数成功跳到目标进度附近
+      handled = true;
+      cleanup();
+    }
+  }
+
+  timeout = Timer(const Duration(seconds: 6), cleanup);
+
+  sub = engine.positionStream.listen((pos) {
+    if (pos > Duration.zero) {
+      checkAndSeek(pos);
+    }
+  });
+}
+
+/// 执行居中弹窗发起的换源操作：无缝衔接起播、继承当前播放进度、记录历史与更新会话状态。
+Future<void> _executeCandidateSwitch(
+  WidgetRef ref,
+  MediaPlaySpec spec,
+  CrossSiteCandidate candidate,
+  PlayFrom line,
+  int episodeIndex,
+) async {
+  final engine = ref.read(playerEngineProvider);
+  final tracker = ref.read(playbackHistoryTrackerProvider);
+  await tracker.flush();
+  tracker.track(null, flushPrevious: false);
+
+  // 1. 动态获取当前最新播放进度（优先读播放引擎实时进度，若为 0 再退回 spec.startPosition）
+  final currentProgress = engine.position > Duration.zero
+      ? engine.position
+      : (spec.startPosition ?? Duration.zero);
+  final sourceLabel = formatSourceAndLine(candidate.site.name, line.name);
+  final targetSpec = spec.copyWith(
+    title: '${candidate.vodName} - ${candidate.episodeName} ($sourceLabel)',
+    startPosition: currentProgress,
+  );
+
+  // 2. 换源起播
+  await engine.switchSource(targetSpec);
+
+  // 3. 防御性补位：在部分流媒体源下，mpv 的 open(start) 可能未直接对齐到流偏移
+  // 若起播后短时间内播放位置落后目标进度，主动触发一次 seek 到当前进度
+  if (currentProgress > const Duration(seconds: 1)) {
+    _ensureSeekAfterSwitch(engine, targetSpec, currentProgress);
+  }
+
+  // 4. 记录历史与状态
+  final item = candidate.item;
+  final recordId =
+      '${candidate.site.key}::${HistoryRecord.buildId(item.id, candidate.episodeName)}';
+  final record = HistoryRecord(
+    id: recordId,
+    vodId: item.id,
+    vodName: item.name,
+    vodPic: item.pic,
+    episodeName: candidate.episodeName,
+    sourceName: line.name,
+    playUrl: targetSpec.url,
+    episodeUrl: line.episodes[episodeIndex].url,
+    siteKey: candidate.site.key,
+    siteName: candidate.site.name,
+    timestamp: DateTime.now().millisecondsSinceEpoch,
+    positionMs: currentProgress.inMilliseconds,
+    durationMs: engine.duration.inMilliseconds,
+  );
+  unawaited(ref.read(configRepositoryProvider).addHistory(record).catchError((Object _) {}));
+  ref.read(activePlaySpecProvider.notifier).state = targetSpec;
+  ref.read(activePlaybackSessionProvider.notifier).state = PlaybackSession(
+    item: item,
+    sourceName: line.name,
+    episodes: line.episodes,
+    index: episodeIndex,
+    site: candidate.site,
+    sources: candidate.detail.sources,
+    sourceIndex: candidate.lineIndex,
+    triedLines: {
+      lineSwitchKey(candidate.lineIndex, line.name),
+    },
+  );
+  ref.read(episodeBrowseSourceIndexProvider.notifier).state = null;
+  tracker.track(recordId,
+      flushPrevious: false,
+      baseline: currentProgress,
+      floor: currentProgress > Duration.zero ? currentProgress : null);
+  _playPreparationEpoch++;
+  ref.read(pendingPlayProvider.notifier).state = null;
+  ref.read(playbackIntentProvider.notifier).state = null;
+
+  // 5. 自动换线控制器 arm，并提示换源与断点续播成功
+  if (!targetSpec.isLive) {
+    ref.read(autoLineSwitchProvider).arm(
+      sources: candidate.detail.sources,
+      currentSourceIndex: candidate.lineIndex,
+      currentSourceName: line.name,
+      episodeName: candidate.episodeName,
+      currentEpisodeUrl: line.episodes[episodeIndex].url,
+      tried: {lineSwitchKey(candidate.lineIndex, line.name)},
+      epoch: _playbackSessionEpoch,
+      startPosition: currentProgress,
+    );
+  }
+
+  final positionHint = currentProgress > Duration.zero
+      ? '，继续从 ${_formatPlaybackPosition(currentProgress)} 播放'
+      : '';
+  ref.read(lineSwitchNoticeProvider.notifier).state =
+      '已换到「${candidate.site.name}」 · ${candidate.episodeName}$positionHint';
 }

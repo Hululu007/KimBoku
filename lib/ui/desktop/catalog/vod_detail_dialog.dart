@@ -9,6 +9,7 @@ import '../../../core/api/models/vod_models.dart';
 import '../../../core/api/tmdb_repository.dart';
 import '../../../core/config/models/history_record.dart';
 import '../../../core/api/netdisk_share_links.dart';
+import '../../../core/player/cross_site_models.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_tokens.dart';
 import '../widgets/app_message.dart';
@@ -237,13 +238,25 @@ class _VodDetailDialogState extends State<VodDetailDialog> {
     super.dispose();
   }
 
-  /// §15：打开弹窗时落到当前集所在线路；找不到就保持默认（第一条）。
+  /// 打开弹窗时优选线路：
+  /// 1. 当前正在播放本片时，优选当前正在播放的线路；
+  /// 2. 有历史播放记录时，优选上次播放的线路；
+  /// 3. 若有2条或多条线路，自动优选线路后缀有 m3u8 的线路；
+  /// 4. 兜底第一条有集的线路。
   int _initialSourceIndex() {
-    final current = widget.currentEpisode;
-    if (current == null) return 0;
     final sources = widget.detail.sources;
-    final index = sources.indexWhere((s) => s.name == current.sourceName);
-    return index >= 0 ? index : 0;
+    if (sources.isEmpty) return 0;
+    final current = widget.currentEpisode;
+    if (current != null) {
+      final index = sources.indexWhere((s) => s.name == current.sourceName);
+      if (index >= 0) return index;
+    }
+    final last = widget.lastWatched ?? widget.historySelection?.resumeRecord;
+    if (last != null) {
+      final index = sources.indexWhere((s) => s.name == last.sourceName);
+      if (index >= 0) return index;
+    }
+    return findPreferredLineIndex(sources);
   }
 
   /// §15：只在「同一线路 + 同一下标 + 同一集名」时认为当前集。

@@ -126,6 +126,7 @@ import 'ui/theme/app_tokens.dart';
 import 'ui/theme/app_theme.dart';
 import 'core/player/cross_site_failover_planner.dart';
 import 'core/player/cross_site_search_service.dart';
+import 'core/player/cross_site_source_manager.dart';
 import 'core/player/playback_source_loader.dart';
 import 'core/player/external_player_launcher.dart';
 
@@ -1230,11 +1231,12 @@ Object? _lastPlayError;
   HistoryRecord? resumeRecord,
 }) {
   final episode = episodes[index];
+  final sourceLabel = formatSourceAndLine(site?.name, sourceName);
   if (resolved.isLive) {
     return (
       spec: resolved.copyWith(
         headers: resolved.headers ?? site?.header,
-        title: '${item.name} - ${episode.name} ($sourceName)',
+        title: '${item.name} - ${episode.name} ($sourceLabel)',
         startPosition: Duration.zero,
       ),
       recordId: null,
@@ -1264,7 +1266,7 @@ Object? _lastPlayError;
 
   final spec = resolved.copyWith(
     headers: resolved.headers ?? site?.header,
-    title: '${item.name} - ${episode.name} ($sourceName)',
+    title: '${item.name} - ${episode.name} ($sourceLabel)',
     startPosition: startPosition ?? Duration.zero,
   );
 
@@ -1408,6 +1410,28 @@ Future<({String? error, HistoryResumeMatch? resumeMatch})>
             epoch: _playbackSessionEpoch,
             startPosition: prepared.spec.startPosition ?? Duration.zero,
           );
+      // 起播成功 3 秒后，后台自动搜一次其他来源（同一份缓存 key），打开弹窗直接有结果
+      Timer(const Duration(seconds: 3), () {
+        if (!ref.exists(activePlaybackSessionProvider)) return;
+        final currentSession = ref.read(activePlaybackSessionProvider);
+        if (currentSession?.item.id != session.item.id) return;
+        final config = ref.read(configRepositoryProvider).currentVodConfig;
+        final target = CrossSiteTarget(
+          title: session.item.name,
+          episodeName: candidate.episode.name,
+          episodeIndex: candidate.episodeIndex,
+          totalEpisodes: candidate.source.episodes.length,
+          currentSiteKey: site?.key,
+          currentVodId: session.item.id,
+          currentPosition: prepared.spec.startPosition ?? Duration.zero,
+        );
+        unawaited(ref.read(crossSiteSourceManagerProvider).ensurePrefetch(
+          target: target,
+          sites: config.sites,
+          parseEngine: ref.read(parseEngineProvider),
+          parses: config.parses,
+        ));
+      });
     }
     if (tried.length > 1) {
       final start = prepared.spec.startPosition ?? Duration.zero;
@@ -1535,10 +1559,11 @@ Future<bool> _autoSwitchToLine(
     }
     if (epoch != _playbackSessionEpoch) return false;
 
+    final sourceLabel = formatSourceAndLine(session.site?.name, candidate.source.name);
     final spec = resolved.copyWith(
       headers: resolved.headers ?? session.site?.header,
       title:
-          '${session.item.name} - ${candidate.episode.name} (${candidate.source.name})',
+          '${session.item.name} - ${candidate.episode.name} ($sourceLabel)',
       startPosition: position > Duration.zero ? position : null,
     );
 
@@ -2194,7 +2219,7 @@ PlayerEpisodeListNav? _buildEpisodeListNav(
           PlayFrom(name: session.sourceName, episodes: session.episodes),
         ]
       : session.sources;
-  final hasChoices = session.episodes.length > 1 || sources.length > 1;
+  final hasChoices = session.episodes.isNotEmpty || sources.isNotEmpty;
   if (!hasChoices) return null;
   final requestedBrowse = ref.watch(episodeBrowseSourceIndexProvider);
   final browseSourceIndex = requestedBrowse != null &&
@@ -2213,23 +2238,56 @@ PlayerEpisodeListNav? _buildEpisodeListNav(
       ),
   ];
   final lines = <PlayerLineChoice>[
-    if (sources.length > 1)
-      for (var i = 0; i < sources.length; i++)
-        PlayerLineChoice(
-          index: i,
-          name: sources[i].name,
-          current: i == session.sourceIndex,
-          browsing: i == browseSourceIndex,
-          unavailable:
-              session.failedLines.contains(lineSwitchKey(i, sources[i].name)),
-        ),
+    for (var i = 0; i < sources.length; i++)
+      PlayerLineChoice(
+        index: i,
+        name: sources[i].name,
+        current: i == session.sourceIndex,
+        browsing: i == browseSourceIndex,
+        unavailable:
+            session.failedLines.contains(lineSwitchKey(i, sources[i].name)),
+      ),
   ];
+  final config = ref.watch(vodConfigProvider);
+  final target = CrossSiteTarget(
+    title: session.item.name,
+    episodeName: session.episodes.isNotEmpty && session.index < session.episodes.length
+        ? session.episodes[session.index].name
+        : (session.episodes.isNotEmpty ? session.episodes.first.name : '第1集'),
+    episodeIndex: session.index,
+    totalEpisodes: session.episodes.length,
+    currentSiteKey: session.site?.key,
+    currentVodId: session.item.id,
+    currentPosition: ref.watch(playerEngineProvider).position,
+  );
+  final sourceManager = ref.watch(crossSiteSourceManagerProvider);
+
+  final currentSiteName = session.site?.name ??
+      config.sites
+          .cast<Site?>()
+          .firstWhere((s) => s?.key == session.item.siteKey, orElse: () => null)
+          ?.name ??
+      session.site?.key;
+
   return PlayerEpisodeListNav(
     episodes: episodes,
     lines: lines,
     lineName: browseSource.name,
+    currentSiteName: currentSiteName,
     browsingPlayingLine: browsingPlayingLine,
     switching: session.switching || busy,
+    sourceManager: sourceManager,
+    crossSiteTarget: target,
+    allSites: config.sites,
+    parseEngine: ref.watch(parseEngineProvider),
+    parses: config.parses,
+    onSwitchSource: (spec, candidate, line, epIdx) => _executeCandidateSwitch(
+      ref,
+      spec,
+      candidate,
+      line,
+      epIdx,
+    ),
     onSelectEpisode: (index) => unawaited(
       browsingPlayingLine
           ? _handleEpisodeSwitch(playerContext, ref, index)
@@ -6385,11 +6443,12 @@ class _DesktopMainViewState extends ConsumerState<DesktopMainView> {
       return;
     }
 
+    final sourceLabel = formatSourceAndLine(record.siteName, record.sourceName);
     final playSpec = MediaPlaySpec(
       url: playUrl,
       headers: resolvedSpec?.headers ?? site?.header,
       subtitles: resolvedSpec?.subtitles ?? const [],
-      title: '${record.vodName} - ${record.episodeName} (${record.sourceName})',
+      title: '${record.vodName} - ${record.episodeName} ($sourceLabel)',
       startPosition: record.resumePosition,
     );
 

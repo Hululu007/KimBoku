@@ -32,7 +32,9 @@ class MpvPlayerEngine
         VideoTrackCapable,
         SubtitleTrackCapable,
         SeekRecoveryCapable {
-  MpvPlayerEngine();
+  MpvPlayerEngine() {
+    _setupAdFilterCallback();
+  }
 
   @visibleForTesting
   static const playerConfiguration = PlayerConfiguration(
@@ -55,6 +57,33 @@ class MpvPlayerEngine
     _initialization = Future<void>.value();
     _bindNativeStreams();
     unawaited(_observeNativeSeekCompletion());
+    _setupAdFilterCallback();
+  }
+
+  void _setupAdFilterCallback() {
+    _adFilter.onVariantResolved = (analysis, cut) {
+      final current = _adFilterDebug.value;
+      if (current == null) return;
+      if (!current.fromMaster) return;
+
+      final hasAds = cut != null && cut.cuts.isNotEmpty;
+      _adFilterDebug.value = AdFilterDebugInfo(
+        outcome: hasAds ? AdFilterOutcome.filtered : AdFilterOutcome.noAds,
+        reason: hasAds ? '已在所选码率中裁剪广告' : '所选码率无插播广告',
+        title: current.title,
+        sourceHost: current.sourceHost,
+        proxyHost: current.proxyHost,
+        cutCount: cut?.cuts.length ?? 0,
+        removedSeconds: cut?.removedSeconds ?? 0,
+        sourceDuration: analysis.duration,
+        filteredDuration: analysis.mainDuration,
+        blocks: analysis.blocks,
+        cuts: cut?.cuts ?? const [],
+        fromMaster: true,
+        shiftedStart: current.shiftedStart,
+        at: DateTime.now(),
+      );
+    };
   }
 
   late final Player _player;

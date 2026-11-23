@@ -1,9 +1,11 @@
+import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xiugou_tv/core/player/ad_filter_debug.dart';
 import 'package:xiugou_tv/core/player/hls_ad_filter.dart';
 import 'package:xiugou_tv/core/player/models/player_state.dart';
 import 'package:xiugou_tv/core/player/player_engine.dart';
+import 'package:xiugou_tv/ui/desktop/player/ad_debug_panel.dart';
 
 class _FakePlayerEngine extends PlayerEngine {
   final ValueNotifier<AdFilterDebugInfo?> _adFilterDebug =
@@ -25,6 +27,12 @@ class _FakePlayerEngine extends PlayerEngine {
   Future<void> stop() async {
     _adFilterDebug.value = null;
   }
+
+  @override
+  Duration get position => Duration.zero;
+
+  @override
+  Stream<Duration> get positionStream => Stream.value(Duration.zero);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -86,6 +94,54 @@ void main() {
 
       expect(engine.adFilterDebug.value, isNull,
           reason: '起播新单集时必须清空上一集的广告调试数据');
+    });
+
+    testWidgets('AdDebugPanel 正常渲染复制按钮与关闭按钮', (tester) async {
+      final engine = _FakePlayerEngine();
+      engine.setDebugInfo(const AdFilterDebugInfo(
+        title: '测试剧集 第 1 集',
+        sourceHost: 'example.com',
+        proxyHost: '127.0.0.1:54321',
+        outcome: AdFilterOutcome.filtered,
+        cuts: [
+          HlsAdCut(start: 10.0, end: 25.0, placement: HlsAdPlacement.middle, segments: 3),
+        ],
+        blocks: [
+          HlsAdBlock(duration: 10.0, segments: 2, isAd: false),
+          HlsAdBlock(duration: 15.0, segments: 3, isAd: true, placement: HlsAdPlacement.middle),
+        ],
+        sourceDuration: 125.0,
+        filteredDuration: 110.0,
+        cutCount: 1,
+        removedSeconds: 15.0,
+        reason: '成功剪除 1 处插播广告',
+      ));
+
+      var closed = false;
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: AdDebugPanel(
+            engine: engine,
+            onClose: () => closed = true,
+          ),
+        ),
+      ));
+
+      expect(find.text('广告调试'), findsOneWidget);
+      expect(find.text('已剪辑'), findsOneWidget);
+      expect(find.text('复制'), findsOneWidget);
+
+      // 点击复制
+      await tester.ensureVisible(find.text('复制'));
+      await tester.tap(find.text('复制'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('已复制'), findsOneWidget);
+
+      // 点击右上角关闭
+      await tester.tap(find.byIcon(Icons.close));
+      expect(closed, isTrue);
     });
   });
 }

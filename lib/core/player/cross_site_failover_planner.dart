@@ -3,7 +3,10 @@ import '../api/netdisk_share_links.dart';
 import '../config/models/history_record.dart';
 import '../config/models/vod_config.dart';
 import '../history/history_match.dart';
+import 'cross_site_models.dart';
 import 'line_switch_planner.dart';
+
+export 'cross_site_models.dart';
 
 /// 跨站故障转移的站源数量上限（方案 §3.4）。
 const int maxCrossSiteSiteCount = 8;
@@ -94,31 +97,6 @@ class CrossSiteTitleIdentity {
       'CrossSiteTitleIdentity(base: $base, season: $season, special: $special)';
 }
 
-/// 当前正在播放的影片，作为跨站匹配的目标。
-class CrossSiteTarget {
-  const CrossSiteTarget({
-    required this.item,
-    required this.episodeName,
-    required this.episodeCount,
-    this.siteKey,
-  });
-
-  final VodItem item;
-  final String episodeName;
-
-  /// 当前线路的集数；0 表示未知。用于单集 / 多集判断。
-  final int episodeCount;
-
-  /// 当前站 key；[evaluateCrossSiteCandidate] 未显式传 currentSiteKey 时用它。
-  final String? siteKey;
-
-  CrossSiteTitleIdentity get identity => parseCrossSiteTitle(item.name);
-
-  int? get year => parseCrossSiteYear(item.year);
-
-  CrossSiteCoarseType? get coarseType =>
-      inferCrossSiteCoarseType(item.typeName);
-}
 
 /// 某个候选线路上的集匹配结果。
 class CrossSiteEpisodeMatch {
@@ -172,45 +150,6 @@ class CrossSiteMatchEvidence {
       yearMatched || actorOverlap > 0 || contentOverlap;
 }
 
-/// 一个通过硬条件的跨站候选。一个候选对应「一个站 + 一条线路」。
-class CrossSiteCandidate {
-  const CrossSiteCandidate({
-    required this.site,
-    required this.detail,
-    required this.item,
-    required this.configIndex,
-    required this.sourceIndex,
-    required this.source,
-    required this.episodeMatch,
-    required this.identity,
-    required this.evidence,
-    required this.netdisk,
-  });
-
-  final Site site;
-  final VodDetail detail;
-  final VodItem item;
-
-  /// 站源在配置中的顺序，用于同分稳定排序。
-  final int configIndex;
-  final int sourceIndex;
-  final PlayFrom source;
-  final CrossSiteEpisodeMatch episodeMatch;
-  final CrossSiteTitleIdentity identity;
-  final CrossSiteMatchEvidence evidence;
-
-  /// 详情里是否含网盘分享链接；同一置信度下优先非网盘。
-  final bool netdisk;
-
-  int get score => evidence.score;
-
-  CrossSiteConfidence get confidence => evidence.confidence;
-
-  String get episodeName => episodeMatch.episode.name;
-
-  bool get isSameName =>
-      episodeMatch.kind == CrossSiteEpisodeMatchKind.sameName;
-}
 
 /// 把标题转成「基础片名 + 季号 + 特别篇」。
 ///

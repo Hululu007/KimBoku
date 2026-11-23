@@ -110,6 +110,9 @@ class HlsAdFilterProxy {
   int _counter = 0;
   bool _closed = false;
 
+  /// 当播放器请求具体码率子列表并完成分析与裁剪后触发的回调，供调试面板实时刷新。
+  void Function(HlsAdAnalysis analysis, HlsCutPlaylist? cut)? onVariantResolved;
+
   /// 当前监听端口（未启动时为 null），仅用于诊断与测试。
   int? get port => _server?.port;
 
@@ -254,10 +257,12 @@ class HlsAdFilterProxy {
     String body = absolute;
     if (hasEndListText(absolute) && !hasByteRangeText(absolute)) {
       final analysis = analyzeAdBlocks(absolute);
+      HlsCutPlaylist? cut;
       if (analysis.hasAds) {
-        final cut = buildCutPlaylist(absolute, analysis);
+        cut = buildCutPlaylist(absolute, analysis);
         if (cut.cuts.isNotEmpty) body = cut.playlist;
       }
+      onVariantResolved?.call(analysis, cut);
     }
     entry.body = body;
     return body;

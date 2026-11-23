@@ -1,17 +1,20 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/player/ad_filter_debug.dart';
 import '../../../core/player/hls_ad_filter.dart';
 import '../../../core/player/player_engine.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_tokens.dart';
+import '../widgets/app_message.dart';
 
 /// 播放器内的「广告调试」面板（默认 D 键开关，与 KimBoxPC 的按键习惯一致）。
 ///
-/// 只读展示本集的剪辑结论：剪了几段、每段起止、每个 chunk 的时长/分片数，
-/// 以及**没剪的原因**（开关关着 / 非 m3u8 / 直播 / 系统代理 / 拉取失败……）。
-/// 数据源是 `PlayerEngine.adFilterDebug`，换集时引擎会把它清空。
-class AdDebugPanel extends StatelessWidget {
+/// 展示本集的剪辑结论：剪了几段、每段起止、每个 chunk 的时长/分片数，
+/// 以及没剪的原因（开关关着 / 非 m3u8 / 直播 / 系统代理 / 拉取失败……）。
+/// 支持多码率子列表动态裁剪结果回传更新，并提供一键复制调试信息功能。
+class AdDebugPanel extends StatefulWidget {
   const AdDebugPanel({
     super.key,
     required this.engine,
@@ -22,12 +25,41 @@ class AdDebugPanel extends StatelessWidget {
   final VoidCallback? onClose;
 
   @override
+  State<AdDebugPanel> createState() => _AdDebugPanelState();
+}
+
+class _AdDebugPanelState extends State<AdDebugPanel> {
+  bool _copied = false;
+  Timer? _copyTimer;
+
+  @override
+  void dispose() {
+    _copyTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _copyReport(AdFilterDebugInfo info) async {
+    try {
+      final text = info.toReportText();
+      unawaited(Clipboard.setData(ClipboardData(text: text)).catchError((_) {}));
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() => _copied = true);
+    showAppMessage('广告调试信息已复制到剪贴板', type: AppMessageType.success);
+    _copyTimer?.cancel();
+    _copyTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _copied = false);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final palette = AppPalette.of(context);
-    return IgnorePointer(
+    return Material(
+      color: Colors.transparent,
       child: Container(
-        width: 392,
-        constraints: const BoxConstraints(maxHeight: 460),
+        width: 410,
+        constraints: const BoxConstraints(maxHeight: 480),
         decoration: BoxDecoration(
           color: palette.playerChrome,
           borderRadius: BorderRadius.circular(AppRadii.md),
@@ -35,7 +67,7 @@ class AdDebugPanel extends StatelessWidget {
           boxShadow: AppShadows.cardHover(palette.accent),
         ),
         child: ValueListenableBuilder<AdFilterDebugInfo?>(
-          valueListenable: engine.adFilterDebug,
+          valueListenable: widget.engine.adFilterDebug,
           builder: (context, info, _) {
             return Column(
               mainAxisSize: MainAxisSize.min,
@@ -51,7 +83,7 @@ class AdDebugPanel extends StatelessWidget {
                         : _buildBody(palette, info),
                   ),
                 ),
-                _buildFooter(context, palette, info),
+                if (info != null) _buildFooter(context, palette, info),
               ],
             );
           },
@@ -84,9 +116,15 @@ class AdDebugPanel extends StatelessWidget {
           const SizedBox(width: 8),
           if (outcome != null)
             Flexible(
-              child: Text(outcome.label,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: color, fontSize: AppType.caption)),
+              child: Text(
+                outcome.label,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: color,
+                  fontSize: AppType.caption,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           const Spacer(),
           Container(
@@ -100,6 +138,21 @@ class AdDebugPanel extends StatelessWidget {
                     color: palette.playerText.withValues(alpha: 0.7),
                     fontSize: AppType.caption)),
           ),
+          if (widget.onClose != null) ...[
+            const SizedBox(width: 6),
+            InkWell(
+              onTap: widget.onClose,
+              borderRadius: BorderRadius.circular(4),
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(
+                  Icons.close,
+                  size: 16,
+                  color: palette.playerText.withValues(alpha: 0.6),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -201,44 +254,85 @@ class AdDebugPanel extends StatelessWidget {
       ));
     }
 
-    rows.add(_sectionTitle(palette, '状态'));
-    rows.add(StreamBuilder<Duration>(
-      stream: engine.positionStream,
-      initialData: engine.position,
-      builder: (context, snapshot) {
-        final position = snapshot.data ?? Duration.zero;
-        final total = info.filteredDuration > 0
-            ? info.filteredDuration
-            : info.sourceDuration;
-        final tail = info.outcome == AdFilterOutcome.filtered
-            ? '剪辑模式：列表里已无广告'
-            : '原地址播放：${info.outcome.label}';
-        return Text(
-          '${_clock(position.inMilliseconds / 1000)}'
-          '${total > 0 ? ' / ${_clock(total)}' : ''} · $tail',
-          style: TextStyle(color: palette.playerText, fontSize: AppType.caption),
-        );
-      },
-    ));
-
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: rows);
   }
 
+  /// 底部固定状态栏与复制按钮（与截图设计完全一致）
   Widget _buildFooter(
-      BuildContext context, AppPalette palette, AdFilterDebugInfo? info) {
+      BuildContext context, AppPalette palette, AdFilterDebugInfo info) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(
-          AppSpacing.md, AppSpacing.xs, AppSpacing.md, AppSpacing.sm),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md, vertical: AppSpacing.sm),
       decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
         border: Border(
           top: BorderSide(color: context.glassBorder.withValues(alpha: 0.5)),
         ),
       ),
-      child: Text(
-        'D 键开关 · 鼠标穿透 · 结论只对当前有效',
-        style: TextStyle(
-            color: palette.playerText.withValues(alpha: 0.45),
-            fontSize: AppType.caption),
+      child: Row(
+        children: [
+          Expanded(
+            child: StreamBuilder<Duration>(
+              stream: widget.engine.positionStream,
+              initialData: widget.engine.position,
+              builder: (context, snapshot) {
+                final position = snapshot.data ?? Duration.zero;
+                final total = info.filteredDuration > 0
+                    ? info.filteredDuration
+                    : info.sourceDuration;
+                final tail = info.outcome == AdFilterOutcome.filtered
+                    ? (info.fromMaster ? '剪辑模式：已裁剪所选码率广告' : '剪辑模式：列表里已无广告')
+                    : (info.fromMaster
+                        ? (info.hasAnalysis ? '多码率模式：已裁剪所选码率广告' : '多码率模式：动态裁剪所选档位')
+                        : '原地址播放：${info.outcome.label}');
+                return Text(
+                  '${_clock(position.inMilliseconds / 1000)}'
+                  '${total > 0 ? ' / ${_clock(total)}' : ''} · $tail',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: palette.playerText, fontSize: AppType.caption),
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: () => _copyReport(info),
+            borderRadius: BorderRadius.circular(4),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              decoration: BoxDecoration(
+                color: _copied
+                    ? palette.success.withValues(alpha: 0.18)
+                    : Colors.white.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(
+                  color: _copied
+                      ? palette.success.withValues(alpha: 0.6)
+                      : Colors.white.withValues(alpha: 0.22),
+                  width: 0.8,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_copied) ...[
+                    Icon(Icons.check, size: 12, color: palette.success),
+                    const SizedBox(width: 4),
+                  ],
+                  Text(
+                    _copied ? '已复制' : '复制',
+                    style: TextStyle(
+                      color: _copied ? palette.success : palette.playerText,
+                      fontSize: AppType.caption,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -254,8 +348,9 @@ class AdDebugPanel extends StatelessWidget {
 
   String _methodText(AdFilterDebugInfo info) {
     if (info.outcome == AdFilterOutcome.filtered) {
+      final suffix = info.fromMaster ? '（多码率裁剪）' : '';
       return '剪辑（删除 ${info.cutCount} 段 / '
-          '${info.removedSeconds.toStringAsFixed(1)}s）';
+          '${info.removedSeconds.toStringAsFixed(1)}s）$suffix';
     }
     if (info.fromMaster) return '主列表转发（按所选码率裁剪）';
     return info.outcome.label;
