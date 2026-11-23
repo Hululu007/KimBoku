@@ -393,12 +393,16 @@ function Test-Launch([string]$Scope, [string]$Root) {
                     }
                 }
                 if ($colors.Count -lt 4) {
-                    [void][XgWin]::SetForegroundWindow($hwnd)
-                    Start-Sleep -Milliseconds 300
-                    $g = [System.Drawing.Graphics]::FromImage($bmp)
-                    $g.CopyFromScreen($r.Left, $r.Top, 0, 0, (New-Object System.Drawing.Size $w, $h))
-                    $g.Dispose()
-                    $colors = @{}
+                    try {
+                        [void][XgWin]::SetForegroundWindow($hwnd)
+                        Start-Sleep -Milliseconds 300
+                        $g = [System.Drawing.Graphics]::FromImage($bmp)
+                        $g.CopyFromScreen($r.Left, $r.Top, 0, 0, (New-Object System.Drawing.Size $w, $h))
+                        $g.Dispose()
+                        $colors = @{}
+                    } catch {
+                        # 无交互桌面或无活动屏幕 DC 时 CopyFromScreen 会抛 The handle is invalid，忽略并继续由 PrintWindow 重试
+                    }
                 }
                 for ($x = 0; $x -lt 24; $x++) {
                     for ($y = 0; $y -lt 24; $y++) {
