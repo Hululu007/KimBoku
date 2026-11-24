@@ -4019,11 +4019,11 @@ class _StorageCacheCardState extends State<_StorageCacheCard> {
     _toast('已停用自定义目录，继续使用默认目录', type: AppMessageType.success);
   }
 
-  /// 旧版本数据在 `%APPDATA%/XiugouTV` 时，允许用户主动搬到安装目录下的 `user_data`。
+  /// 旧版本数据在 `%APPDATA%/XiugouTV` 时，允许用户主动搬到新版数据目录 `%APPDATA%/KimBoKu`。
   ///
   /// 走既有的 pending + 启动迁移流程：只复制不删除，失败保留原目录。
-  Future<void> _moveToPortableDirectory() async {
-    final target = DataDirectoryManager.portableDirectoryPath();
+  Future<void> _moveToAppDataDirectory() async {
+    final target = DataDirectoryManager.appDataDirectoryPath();
     try {
       final status = await DataDirectoryManager.requestDirectory(target);
       if (!mounted) return;
@@ -4033,7 +4033,7 @@ class _StorageCacheCardState extends State<_StorageCacheCard> {
     } on DataDirectoryException catch (error) {
       _toast(error.message, type: AppMessageType.error);
     } catch (error) {
-      _toast('无法迁移到安装目录：$error', type: AppMessageType.error);
+      _toast('无法迁移到新版数据目录：$error', type: AppMessageType.error);
     }
   }
 
@@ -4156,8 +4156,8 @@ class _StorageCacheCardState extends State<_StorageCacheCard> {
                 children: [
                   Expanded(
                     child: Text(
-                      '检测到旧版数据目录，已继续沿用（不会自动搬家）。'
-                      '可迁移到安装目录下的 user_data：只复制不删除，失败会保留原目录。',
+                      '检测到旧版数据目录（XiugouTV），已继续沿用。'
+                      '可迁移到新版数据目录（KimBoKu）：只复制不删除，失败会保留原目录。',
                       key: const ValueKey('data-dir-legacy-hint'),
                       style: TextStyle(
                           fontSize: AppType.body,
@@ -4166,8 +4166,8 @@ class _StorageCacheCardState extends State<_StorageCacheCard> {
                   ),
                   TextButton(
                     key: const ValueKey('data-dir-portable'),
-                    onPressed: _busy ? null : _moveToPortableDirectory,
-                    child: const Text('迁移到安装目录'),
+                    onPressed: _busy ? null : _moveToAppDataDirectory,
+                    child: const Text('迁移到 KimBoKu'),
                   ),
                 ],
               ),

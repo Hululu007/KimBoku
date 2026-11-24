@@ -200,8 +200,10 @@ class CompanionProcessManager implements CompanionRecoveryHost {
       p.join(workingDirectory, 'runtime/jre/bin/$javaExe'),
       p.join(workingDirectory, 'jre/bin/$javaExe'),
       p.join(workingDirectory, 'companion/runtime/jre/bin/$javaExe'),
-      if (appData != null && appData.isNotEmpty)
+      if (appData != null && appData.isNotEmpty) ...[
+        p.join(appData, 'KimBoKu/runtime/jre/bin/$javaExe'),
         p.join(appData, 'XiugouTV/runtime/jre/bin/$javaExe'),
+      ],
       if (javaHome != null && javaHome.isNotEmpty)
         p.join(javaHome, 'bin/$javaExe'),
     ];

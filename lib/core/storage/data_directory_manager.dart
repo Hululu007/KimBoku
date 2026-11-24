@@ -20,8 +20,8 @@ class DataDirectoryStatus {
   /// 当前实际使用的数据目录。
   final String activePath;
 
-  /// 默认目录：便携版是安装目录下的 `user_data`；安装目录不可写、或沿用了旧版数据时
-  /// 是 `%APPDATA%/XiugouTV`。
+  /// 默认目录：标准安装下是用户个人目录 `%APPDATA%/KimBoKu`；
+  /// 便携版已有数据时是安装目录下的 `user_data`。
   final String defaultPath;
 
   /// 指针文件里记录的自定义目录（即使当前不可用也保留，便于展示与修复）。
@@ -99,15 +99,16 @@ class DataDirectoryException implements Exception {
   String toString() => message;
 }
 
-/// 用户数据目录解析与迁移（N-2 + 便携版）。
+/// 用户数据目录解析与迁移。
 ///
 /// 设计要点：
-/// - 默认目录是**安装目录下的 `user_data`**（便携 ZIP 解压即用）；安装目录不可写
-///   （Program Files / 只读介质）时回退 `%APPDATA%/XiugouTV` 并给出中文原因；
-/// - 旧版本的数据可从 `%APPDATA%/XiugouTV` 复制到可写的 `user_data`；
-///   迁移成功后切换，不删除旧资料；自定义目录或待重置的数据不自动搬家；
-/// - 自定义目录优先于默认目录，指针与 pending 标记都放在**默认目录**，因此自定义
-///   目录换了位置也能找回；
+/// - 默认目录是**用户个人数据目录 `%APPDATA%/KimBoKu`**（天然可写，无需管理员提权，
+///   彻底解决 Program Files 写入权限受限与警告）；
+/// - 若安装目录下已有包含数据的 `user_data`（便携版解压即用用户或测试夹具），
+///   优先沿用便携目录；
+/// - 旧版本（`%APPDATA%/XiugouTV`）的数据在启动时自动平滑迁移至 `%APPDATA%/KimBoKu`，
+///   只复制不删除、逐文件 sha256 校验，无感升级；
+/// - 自定义目录优先于默认目录，指针与 pending 标记都放在**默认目录**；
 /// - 迁移只在启动、任何存储初始化之前执行，避免运行中双目录写入；
 /// - 只复制、不删除源文件；覆盖前先写 `.migration-safety/<时间戳>/` 安全副本。
 class DataDirectoryManager {
@@ -119,11 +120,14 @@ class DataDirectoryManager {
   /// 待下次启动执行的迁移（位于默认目录）。
   static const String pendingFileName = 'data_location_pending.json';
 
-  /// 便携自动搬迁的结果标记（位于旧版目录）：存在即表示已经尝试过，不再自动重试。
+  /// 自动搬迁的结果标记（位于旧版目录）：存在即表示已经尝试过，不再自动重试。
   static const String autoMigrateFileName = 'data_location_auto_migrate.json';
 
   /// 覆盖前安全副本目录（位于目标目录）。
   static const String safetyDirName = '.migration-safety';
+
+  /// 用户数据默认目录名（`%APPDATA%` 下）。
+  static const String appDataDirectoryName = 'KimBoKu';
 
   /// 便携数据目录名（安装目录下）。
   static const String portableDirectoryName = 'user_data';
@@ -157,8 +161,21 @@ class DataDirectoryManager {
   /// 最近一次解析使用的旧版目录（测试会注入临时目录，不能读环境变量）。
   static String? _resolvedLegacyPath;
 
+  /// 最近一次解析使用的 AppData 目录（测试会注入临时目录，不能读环境变量）。
+  static String? _resolvedAppDataPath;
+
   /// 测试注入的安装目录（默认取 exe 所在目录）。
   static String? _installDirectoryOverride;
+
+  /// 用户数据默认目录：`%APPDATA%/KimBoKu`（缺失环境变量时 `%USERPROFILE%/.KimBoKu`）。
+  static String appDataDirectoryPath() {
+    final appData = Platform.environment['APPDATA'];
+    if (appData != null && appData.isNotEmpty) {
+      return p.join(appData, appDataDirectoryName);
+    }
+    final userProfile = Platform.environment['USERPROFILE'] ?? '.';
+    return p.join(userProfile, '.$appDataDirectoryName');
+  }
 
   /// 旧版本默认目录：`%APPDATA%/XiugouTV`（缺失环境变量时 `%USERPROFILE%/.XiugouTV`）。
   static String legacyDirectoryPath() {
@@ -174,12 +191,9 @@ class DataDirectoryManager {
   static String portableDirectoryPath() =>
       p.join(_installDirectory(), portableDirectoryName);
 
-  /// 默认目录：启动时解析的结果；未初始化时返回旧版目录（不探测磁盘，避免副作用）。
-  ///
-  /// 解析顺序见 [_resolveDefaultDirectory]：安装目录可写 → `user_data`；
-  /// 安装目录不可写 → 回退 `%APPDATA%/XiugouTV`；旧版 APPDATA 已有数据 → 沿用旧目录。
+  /// 默认目录：启动时解析的结果；未初始化时返回用户数据目录（不探测磁盘，避免副作用）。
   static String defaultDirectoryPath() =>
-      _resolvedDefaultPath ?? legacyDirectoryPath();
+      _resolvedDefaultPath ?? appDataDirectoryPath();
 
   /// 当前数据目录（同步）。未初始化时返回默认目录，保持既有测试与工具的行为。
   static String get currentPath => _activePath ?? defaultDirectoryPath();
@@ -211,23 +225,29 @@ class DataDirectoryManager {
     _status = null;
     _resolvedDefaultPath = null;
     _resolvedLegacyPath = null;
+    _resolvedAppDataPath = null;
     _installDirectoryOverride = null;
   }
 
   /// 启动时解析目录并执行待定迁移。不会抛异常（失败记录在 status 里）。
   ///
-  /// 不传 [defaultDirectory] 时按便携优先规则解析默认目录（[portableDirectoryPath]）。
-  /// [installDirectory] / [legacyDirectory] 仅供测试注入，避免依赖真实 exe 路径与 %APPDATA%。
+  /// 不传 [defaultDirectory] 时默认解析为用户个人数据目录（[appDataDirectoryPath]），
+  /// 若便携目录已有数据则沿用便携目录（[portableDirectoryPath]）。
+  /// [installDirectory] / [appDataDirectory] / [legacyDirectory] 仅供测试注入。
   static Future<DataDirectoryStatus> initialize({
     String? defaultDirectory,
     String? installDirectory,
+    String? appDataDirectory,
     String? legacyDirectory,
   }) async {
     if (installDirectory != null && installDirectory.trim().isNotEmpty) {
       _installDirectoryOverride = p.normalize(p.absolute(installDirectory));
     }
     final resolution = defaultDirectory == null
-        ? await _resolveDefaultDirectory(legacyDirectory: legacyDirectory)
+        ? await _resolveDefaultDirectory(
+            appDataDirectory: appDataDirectory,
+            legacyDirectory: legacyDirectory,
+          )
         : _DefaultDirectoryResolution(
             p.normalize(p.absolute(defaultDirectory)), null);
     var defaultPath = resolution.path;
@@ -236,6 +256,47 @@ class DataDirectoryManager {
     String? unavailable;
     String? pendingPath;
     String? pendingError;
+
+    // 旧版数据平滑迁移：%APPDATA%/XiugouTV -> %APPDATA%/KimBoKu
+    // 默认使用用户个人目录；若 KimBoKu 尚无数据但旧版 XiugouTV 存在数据，
+    // 启动时自动完成无缝搬迁。只复制不删除、逐文件 sha256 校验。
+    final legacyPath = _resolvedLegacyPath ?? legacyDirectoryPath();
+    final resetPending =
+        File(p.join(defaultPath, appDataResetMarkerFileName)).existsSync();
+    if (defaultDirectory == null &&
+        !resetPending &&
+        _samePath(defaultPath, _resolvedAppDataPath ?? appDataDirectoryPath()) &&
+        !_samePath(defaultPath, legacyPath) &&
+        !_containsUserData(defaultPath) &&
+        _containsUserData(legacyPath) &&
+        !_autoMigrateAttempted(legacyPath)) {
+      final moved = await _migrate(
+        from: legacyPath,
+        to: defaultPath,
+        defaultPath: defaultPath,
+      );
+      if (moved.ok) {
+        final legacyPointer = File(p.join(legacyPath, pointerFileName));
+        if (legacyPointer.existsSync()) {
+          try {
+            await legacyPointer.copy(p.join(defaultPath, pointerFileName));
+          } catch (_) {}
+        }
+        final legacyPending = File(p.join(legacyPath, pendingFileName));
+        if (legacyPending.existsSync()) {
+          try {
+            await legacyPending.copy(p.join(defaultPath, pendingFileName));
+          } catch (_) {}
+        }
+        _recordAutoMigrateSuccess(legacyPath, defaultPath);
+        active = defaultPath;
+      } else {
+        _recordAutoMigrateFailure(legacyPath, moved.message ?? '旧数据迁移失败');
+        active = legacyPath;
+        defaultPath = legacyPath;
+        unavailable = '旧数据迁移至 KimBoKu 失败：${moved.message}（已继续使用原目录）';
+      }
+    }
 
     final pointer = _readMarker(defaultPath, pointerFileName);
     if (pointer != null) {
@@ -260,10 +321,10 @@ class DataDirectoryManager {
     }
 
     // 重置先于搬迁：启动随后会在原目录消费标记，不能先复制待清空的资料。
-    final resetPending =
+    final currentResetPending =
         File(p.join(defaultPath, appDataResetMarkerFileName)).existsSync();
     final pending =
-        resetPending ? null : _readMarker(defaultPath, pendingFileName);
+        currentResetPending ? null : _readMarker(defaultPath, pendingFileName);
     if (pending != null) {
       pendingPath = p.normalize(p.absolute(pending));
       if (_samePath(pendingPath, active)) {
@@ -303,31 +364,6 @@ class DataDirectoryManager {
       }
     }
 
-    // 便携搬迁：升级用户的数据还留在旧版 %APPDATA%/XiugouTV 时，自动搬一次到
-    // 安装目录下的 user_data —— 这就是「数据跟着安装目录走」的实现路径。
-    // 仍然只复制不删除、逐文件 sha256 校验，成功后才切换；失败保留旧目录，
-    // 记下原因，之后不再自动重试（设置页还能手动迁移）。
-    if (!resetPending &&
-        pendingPath == null &&
-        unavailable == null &&
-        !_samePath(active, portableDirectoryPath()) &&
-        _samePath(active, _resolvedLegacyPath ?? legacyDirectoryPath()) &&
-        !_containsUserData(portableDirectoryPath()) &&
-        !_autoMigrateAttempted(defaultPath)) {
-      final moved = await _migrate(
-        from: active,
-        to: portableDirectoryPath(),
-        defaultPath: defaultPath,
-      );
-      if (moved.ok) {
-        active = portableDirectoryPath();
-        customPath = null;
-      } else {
-        _recordAutoMigrateFailure(
-            defaultPath, moved.message ?? '迁移失败');
-      }
-    }
-
     // 迁到程序旁后，下次启动会优先从那里读标记；本次设置页也必须写到同一处。
     if (defaultDirectory == null &&
         customPath == null &&
@@ -340,8 +376,7 @@ class DataDirectoryManager {
       activePath: active,
       defaultPath: defaultPath,
       customPath: customPath,
-      // 自定义目录失败时优先报自定义目录的原因；没有自定义目录时报
-      // 「安装目录不可写、已回退 APPDATA」的原因，设置页据此显示提示。
+      // 自定义目录失败时优先报自定义目录的原因；没有自定义目录时报回退原因。
       unavailableReason: unavailable ??
           (customPath == null && _samePath(defaultPath, resolution.path)
               ? resolution.reason
@@ -353,43 +388,36 @@ class DataDirectoryManager {
   }
 
   // -------------------------------------------------------------------------
-  // 默认目录解析（便携版）
+  // 默认目录解析
   // -------------------------------------------------------------------------
 
-  /// 解析默认目录：便携优先、旧数据沿用、只读安装目录回退。
+  /// 解析默认目录：便携优先（已有数据时）、标准默认使用用户 AppData 目录。
   ///
   /// 顺序：
-  /// 1. `user_data` 里已有数据（便携版用户）→ 校验可写后用便携目录；
-  /// 2. 否则旧版 `%APPDATA%/XiugouTV` 有数据 → 先把旧目录当作默认目录，再由
-  ///    [initialize] 的「便携搬迁」把它一次性搬到安装目录下的 `user_data`；
-  /// 3. 全新安装 → 探测安装目录可写，可写用 `user_data`，否则回退 APPDATA 并
-  ///    记录中文原因。
-  ///
-  /// 搬迁必须保命：只复制不删除、逐文件 sha256 校验、成功后才切换，旧目录原样
-  /// 留着当回退；失败则保留旧目录并把原因记进 `data_location_auto_migrate.json`，
-  /// 之后不再反复尝试（设置页仍可手动迁移）。
+  /// 1. `user_data` 里已有数据（便携版用户或测试夹具）→ 校验可写后用便携目录；
+  /// 2. 标准默认目录为 `%APPDATA%/KimBoKu`（完全位于用户目录，杜绝 Program Files 权限警告）。
   static Future<_DefaultDirectoryResolution> _resolveDefaultDirectory({
+    String? appDataDirectory,
     String? legacyDirectory,
   }) async {
     final portable = p.normalize(p.absolute(portableDirectoryPath()));
+    final appData =
+        p.normalize(p.absolute(appDataDirectory ?? appDataDirectoryPath()));
     final legacy =
         p.normalize(p.absolute(legacyDirectory ?? legacyDirectoryPath()));
     _resolvedLegacyPath = legacy;
-    // 极端情况：安装目录就在 %APPDATA% 下，两个路径相同，直接用。
-    if (_samePath(portable, legacy)) {
+    _resolvedAppDataPath = appData;
+
+    // 极端情况：安装目录就在 %APPDATA% 下，路径相同，直接用。
+    if (_samePath(portable, appData)) {
       return _DefaultDirectoryResolution(portable, null);
     }
     if (_containsUserData(portable)) {
-      final reason = await _probeDefaultDirectory(portable, legacy: legacy);
+      final reason = await _probeDefaultDirectory(portable, fallback: appData);
       if (reason == null) return _DefaultDirectoryResolution(portable, null);
-      return _DefaultDirectoryResolution(legacy, reason);
+      return _DefaultDirectoryResolution(appData, reason);
     }
-    if (_containsUserData(legacy)) {
-      return _DefaultDirectoryResolution(legacy, null);
-    }
-    final reason = await _probeDefaultDirectory(portable, legacy: legacy);
-    if (reason == null) return _DefaultDirectoryResolution(portable, null);
-    return _DefaultDirectoryResolution(legacy, reason);
+    return _DefaultDirectoryResolution(appData, null);
   }
 
   /// 是否是安装目录下的便携目录（[portableDirectoryPath]）。
@@ -430,26 +458,26 @@ class DataDirectoryManager {
   /// 返回 null 表示可写；否则返回中文原因（用于 status.unavailableReason 与设置页）。
   static Future<String?> _probeDefaultDirectory(
     String path, {
-    required String legacy,
+    required String fallback,
   }) async {
     try {
       final directory = Directory(path);
       if (FileSystemEntity.typeSync(path) == FileSystemEntityType.file) {
-        return '安装目录不可写，已改用 $legacy（$path 是文件，不是目录）';
+        return '安装目录不可写，已改用 $fallback（$path 是文件，不是目录）';
       }
       if (!directory.existsSync()) {
         await directory.create(recursive: true);
       }
       if (FileSystemEntity.typeSync(path) != FileSystemEntityType.directory) {
-        return '安装目录不可写，已改用 $legacy（$path 不是目录）';
+        return '安装目录不可写，已改用 $fallback（$path 不是目录）';
       }
       if (await _isWritable(path)) return null;
-      return '安装目录不可写，已改用 $legacy（$path）';
+      return '安装目录不可写，已改用 $fallback（$path）';
     } on FileSystemException catch (error) {
       final detail = error.osError?.message ?? error.message;
-      return '安装目录不可写，已改用 $legacy（$path：$detail）';
+      return '安装目录不可写，已改用 $fallback（$path：$detail）';
     } catch (error) {
-      return '安装目录不可写，已改用 $legacy（$path：$error）';
+      return '安装目录不可写，已改用 $fallback（$path：$error）';
     }
   }
 
@@ -589,6 +617,24 @@ class DataDirectoryManager {
     } catch (_) {
       // 记不下来也不影响启动：只是下次还会再试一次。
     }
+  }
+
+  /// 记录自动搬迁成功标记：避免重复尝试。
+  static void _recordAutoMigrateSuccess(String legacyPath, String target) {
+    try {
+      final file = File(p.join(legacyPath, autoMigrateFileName));
+      file.parent.createSync(recursive: true);
+      file.writeAsStringSync(
+        jsonEncode({
+          'format': markerFormat,
+          'version': markerVersion,
+          'status': 'success',
+          'migrated_to': target,
+          'at': DateTime.now().toUtc().toIso8601String(),
+        }),
+        flush: true,
+      );
+    } catch (_) {}
   }
 
   // ---------------------------------------------------------------------
