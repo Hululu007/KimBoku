@@ -269,6 +269,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                 pickBackupOpenPath: widget.pickBackupOpenPath,
                                 companionSpiderApi: widget.companionSpiderApi,
                                 categoryFilterService: widget.categoryFilterService,
+                                onResetAll: widget.onResetAll,
                               ),
                             SettingsSection.appearance => AppearancePanel(
                                 key: const ValueKey('settings-appearance'),
@@ -3249,6 +3250,7 @@ class GeneralSettingsPanel extends StatelessWidget {
   final Future<String?> Function()? pickBackupOpenPath;
   final CompanionSpiderApi? companionSpiderApi;
   final CategoryFilterService? categoryFilterService;
+  final Future<void> Function()? onResetAll;
 
   const GeneralSettingsPanel({
     super.key,
@@ -3262,6 +3264,7 @@ class GeneralSettingsPanel extends StatelessWidget {
     this.pickBackupOpenPath,
     this.companionSpiderApi,
     this.categoryFilterService,
+    this.onResetAll,
   });
 
   Future<void> _editCategoryFilterKeywords(BuildContext context) async {
@@ -3765,6 +3768,7 @@ class GeneralSettingsPanel extends StatelessWidget {
             isPlaybackActive: isPlaybackActive,
             pickSavePath: pickBackupSavePath,
             pickOpenPath: pickBackupOpenPath,
+            onResetAll: onResetAll,
           ),
       ],
     );
@@ -4367,24 +4371,30 @@ String _formatBytes(int bytes) {
 // 数据备份与恢复（SET-10）
 // =====================================================================
 
-class _DataBackupCard extends StatefulWidget {
+@visibleForTesting
+class DataBackupCard extends StatefulWidget {
   final DataBackupService service;
   final bool Function()? isPlaybackActive;
   final Future<String?> Function(String suggestedName)? pickSavePath;
   final Future<String?> Function()? pickOpenPath;
+  final Future<void> Function()? onResetAll;
 
-  const _DataBackupCard({
+  const DataBackupCard({
+    super.key,
     required this.service,
     this.isPlaybackActive,
     this.pickSavePath,
     this.pickOpenPath,
+    this.onResetAll,
   });
 
   @override
-  State<_DataBackupCard> createState() => _DataBackupCardState();
+  State<DataBackupCard> createState() => _DataBackupCardState();
 }
 
-class _DataBackupCardState extends State<_DataBackupCard> {
+typedef _DataBackupCard = DataBackupCard;
+
+class _DataBackupCardState extends State<DataBackupCard> {
   bool _busy = false;
   bool _restored = false;
   String? _status;
@@ -4417,7 +4427,7 @@ class _DataBackupCardState extends State<_DataBackupCard> {
     final location = await getSaveLocation(
       suggestedName: suggestedName,
       acceptedTypeGroups: [
-        XTypeGroup(label: '$appDisplayName 数据备份', extensions: const ['json']),
+        const XTypeGroup(label: '$appDisplayName 数据备份', extensions: ['json']),
       ],
     );
     return location?.path;
@@ -4428,7 +4438,7 @@ class _DataBackupCardState extends State<_DataBackupCard> {
     if (pick != null) return pick();
     final file = await openFile(
       acceptedTypeGroups: [
-        XTypeGroup(label: '$appDisplayName 数据备份', extensions: const ['json']),
+        const XTypeGroup(label: '$appDisplayName 数据备份', extensions: ['json']),
       ],
     );
     return file?.path;
@@ -4561,6 +4571,63 @@ class _DataBackupCardState extends State<_DataBackupCard> {
     }
   }
 
+  Future<void> _reset() async {
+    final onResetAll = widget.onResetAll;
+    if (onResetAll == null || _busy || _restored) return;
+    if (widget.isPlaybackActive?.call() ?? false) {
+      _setStatus('请先停止播放，再执行初始化', error: true);
+      return;
+    }
+    final confirmed = await showAppDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: context.palette.card,
+        title: Text('初始化全部数据？',
+            style: TextStyle(
+                color: context.palette.textTitle, fontSize: AppType.heading)),
+        content: Text(
+          '将清空 $appDisplayName 的全部数据并恢复到刚安装的初始状态：\n'
+          '• 所有配置源、直播源、自建分类与站点缓存\n'
+          '• 全部播放历史、收藏与片头片尾记录\n'
+          '• 界面偏好设置、分类过滤关键字与本地壁纸\n'
+          '• 各站源中的网盘登录状态（需重新扫码）\n\n'
+          '⚠️ 此操作不可撤销！如果需要保留当前数据，建议在初始化前先「导出备份…」。\n'
+          '确认后应用将自动重启并完成初始化。是否继续？',
+          style: TextStyle(
+              color: context.palette.textBody,
+              fontSize: AppType.label,
+              height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('取消', style: TextStyle(color: context.palette.textSub)),
+          ),
+          ElevatedButton(
+            key: const ValueKey('data-backup-reset-confirm'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: context.palette.danger,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadii.sm)),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('全部清空并重启'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await onResetAll();
+    } catch (e) {
+      if (mounted) _setStatus('初始化失败：$e', error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return _card(
@@ -4575,7 +4642,7 @@ class _DataBackupCardState extends State<_DataBackupCard> {
                   color: context.palette.textMain)),
           const SizedBox(height: 4),
           Text(
-            '备份历史、收藏、设置、配置源与直播源等 13 个数据文件；'
+            '备份历史、收藏、设置、配置源与直播源等 ${DataBackupService.maxFiles} 个数据文件；'
             '不含窗口状态、JRE / JAR、缓存或日志。备份可能包含订阅地址与令牌，请妥善保管。',
             style: TextStyle(
                 fontSize: AppType.body,
@@ -4601,6 +4668,20 @@ class _DataBackupCardState extends State<_DataBackupCard> {
                     _busy || _restored ? null : () => unawaited(_restore()),
                 child: const Text('从备份恢复…'),
               ),
+              if (widget.onResetAll != null)
+                OutlinedButton(
+                  key: const ValueKey('data-backup-reset'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: context.palette.danger,
+                    side: BorderSide(
+                        color: context.palette.danger.withValues(alpha: 0.5)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadii.sm)),
+                  ),
+                  onPressed:
+                      _busy || _restored ? null : () => unawaited(_reset()),
+                  child: const Text('初始化数据…'),
+                ),
             ],
           ),
           if (_restored) ...[
@@ -4965,7 +5046,7 @@ class _WallpaperCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             '「恢复默认」只删除应用内的副本，不会删除你的原图；'
-            '壁纸不计入数据备份（备份只含配置 / 收藏 / 历史等 13 个文件）。',
+            '壁纸不计入数据备份（备份只含配置 / 收藏 / 历史等 ${DataBackupService.maxFiles} 个核心文件）。',
             style: TextStyle(
                 fontSize: AppType.caption, color: context.palette.textSub),
           ),

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
 
 import '../config/windows_config_storage.dart';
@@ -49,7 +50,7 @@ typedef BackupFileWriter = Future<void> Function(String path, String content);
 
 /// 数据备份与恢复服务（SET-10）。
 ///
-/// 格式：单文件 JSON 信封 v1，只存 13 个备份白名单文件的原文 + UTF-8 字节数
+/// 格式：单文件 JSON 信封 v1，只存备份白名单文件的原文 + UTF-8 字节数
 /// + SHA-256；不含窗口状态、JRE/JAR、缓存、日志或备份自身。
 class DataBackupService {
   static const int maxTotalBytes = 20 * 1024 * 1024;
@@ -88,7 +89,7 @@ class DataBackupService {
         _flushTimeout = flushTimeout;
 
 
-  /// 读取当前 13 个数据文件并生成备份对象；不写盘。
+  /// 读取当前备份白名单数据文件并生成备份对象；不写盘。
   ///
   /// [allowInvalid] 为 true 时用于「恢复前自动备份」：即使当前数据为空 /
   /// 结构损坏 / 单文件不可读，也尽量保留原文，避免因坏数据而无法恢复。
@@ -378,7 +379,7 @@ class DataBackupService {
     if (!backupAppDataFileNames.contains(name)) {
       throw DataBackupException('不允许恢复到 $name');
     }
-    if (!RegExp(r'^[a-z_]+\.json$').hasMatch(name) ||
+    if (!RegExp(r'^[a-zA-Z0-9_]+\.json$').hasMatch(name) ||
         name.contains('..') ||
         name.contains('/') ||
         name.contains('\\') ||
@@ -406,7 +407,16 @@ class DataBackupService {
     final temp = File('$target.tmp-$_currentPid-${++_sequence}');
     try {
       await temp.writeAsString(content, flush: true);
-      await temp.rename(target);
+      try {
+        await temp.rename(target);
+      } on FileSystemException {
+        // Windows 偶发替换冲突保护：先尝试删除目标再更名
+        final targetFile = File(target);
+        if (await targetFile.exists()) {
+          await targetFile.delete();
+        }
+        await temp.rename(target);
+      }
     } finally {
       try {
         if (await temp.exists()) await temp.delete();
@@ -541,6 +551,29 @@ class DataBackupService {
         case 'startup_preferences.json':
           StartupPreferences.fromJson(_map(content, name));
           break;
+        case 'Category_filter.json':
+          final map = _map(content, name);
+          if (map['hiddenKeywords'] != null) {
+            if (map['hiddenKeywords'] is! List) {
+              throw const FormatException('分类过滤关键字列表格式无效');
+            }
+            if ((map['hiddenKeywords'] as List).length > 2000) {
+              throw const FormatException('分类过滤关键字数量过多');
+            }
+          }
+          if (map['customHiddenKeywords'] != null &&
+              map['customHiddenKeywords'] is! List) {
+            throw const FormatException('旧版分类过滤关键字格式无效');
+          }
+          if (map['probedSites'] != null) {
+            if (map['probedSites'] is! Map) {
+              throw const FormatException('空分类探测缓存格式无效');
+            }
+            if ((map['probedSites'] as Map).length > 2000) {
+              throw const FormatException('空分类探测站点数量过多');
+            }
+          }
+          break;
         default:
           throw FormatException('不允许的备份文件：$name');
       }
@@ -548,6 +581,10 @@ class DataBackupService {
       throw DataBackupException('${error.message}（$name）');
     }
   }
+
+  @visibleForTesting
+  void validateEntryForTesting(String name, String content) =>
+      _validateEntry(name, content);
 
   Map<String, dynamic> _map(String content, String name) {
     final decoded = jsonDecode(content);
