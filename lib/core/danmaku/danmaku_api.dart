@@ -12,7 +12,7 @@ import 'danmaku_source.dart';
 /// - 面向用户：用户用的是维护者打包好的安装包（打包时自动注入），**不需要也看不到**这项配置；
 /// - 维护者本机：`flutter run`（带不带其它参数都行）开发态会自动读 `config/app.env`，见 [AppEnv]；
 /// - 其他开发者：这是留给你的「可选」口子——不建 `config/app.env` 就是不启用弹幕，
-///   播放页没有弹幕按钮 / D 键、设置页没有「弹幕」分组、不发任何请求，其余功能照常；
+///   播放页没有弹幕按钮 / B 键、设置页没有「弹幕」分组、不发任何请求，其余功能照常；
 /// - `config/app.env` 已被 `.gitignore` 排除，**不要提交**；入库的只有空值模板 `config/app.env.example`。
 ///
 /// 服务是自部署的 LogVar Danmu API（https://github.com/qfw66/danmu_api），令牌放在路径第一段。

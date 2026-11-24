@@ -2666,7 +2666,7 @@ class _PlayerSettingsPanelState extends State<PlayerSettingsPanel> {
                     _SettingRow(
                       title: '播放时显示弹幕',
                       description: '点播起播时自动匹配并显示弹幕（直播不显示）；'
-                          '播放中可用控制条「弹幕」按钮或 D 键临时开关，不影响这里的默认值',
+                          '播放中可用控制条「弹幕」按钮或 B 键临时开关，不影响这里的默认值',
                       trailing: Switch(
                         key: const ValueKey('setting-danmaku-enabled'),
                         value: s.danmakuEnabled,

@@ -96,7 +96,7 @@ class PlayerDanmakuNav {
   /// 当前播放是否显示弹幕
   final bool enabled;
 
-  /// 「弹」按钮 / D 键
+  /// 「弹」按钮 / B 键
   final VoidCallback onToggle;
 
   /// 宿主传同一个控制器，播放页才有「搜索弹幕」入口（手动换源）；

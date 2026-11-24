@@ -27,7 +27,7 @@ class DanmakuSettingsPanel extends StatefulWidget {
   final DanmakuSettings initial;
   final ValueChanged<DanmakuSettings> onChanged;
 
-  /// 本次播放是否显示弹幕（与控制条「弹幕」按钮 / D 键同一个开关）
+  /// 本次播放是否显示弹幕（与控制条「弹幕」按钮 / B 键同一个开关）
   final bool enabled;
   final VoidCallback onToggle;
 
