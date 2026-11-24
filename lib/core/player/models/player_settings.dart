@@ -54,7 +54,7 @@ class PlayerSettings {
   /// 关掉后回到「始终显示标题栏」的传统布局。
   final bool hideWindowTitleBar;
 
-  /// 点播弹幕总开关（§43）。默认 true；播放器内「弹」按钮只影响当前播放，
+  /// 点播弹幕总开关（§43）。默认 false（禁用）；播放器内「弹」按钮只影响当前播放，
   /// 这里是每次起播的初始状态。
   final bool danmakuEnabled;
 
@@ -125,7 +125,7 @@ class PlayerSettings {
     this.gamma = 0,
     this.cacheSecs = 30,
     this.hideWindowTitleBar = true,
-    this.danmakuEnabled = true,
+    this.danmakuEnabled = false,
     this.danmaku = DanmakuSettings.defaults,
     this.segmentsAutoApply = true,
     this.showMiniProgress = true,
@@ -245,7 +245,7 @@ class PlayerSettings {
       cacheSecs: integer('cacheSecs', 30, minCacheSecs, maxCacheSecs),
       // 缺字段（旧配置文件）按默认 true 处理；只有显式 false 才关闭。
       hideWindowTitleBar: json['hideWindowTitleBar'] != false,
-      danmakuEnabled: json['danmakuEnabled'] != false,
+      danmakuEnabled: json['danmakuEnabled'] == true,
       danmaku: DanmakuSettings.fromJson(json['danmaku']),
       segmentsAutoApply: json['segmentsAutoApply'] != false,
       showMiniProgress: json['showMiniProgress'] != false,
