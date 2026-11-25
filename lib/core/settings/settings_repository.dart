@@ -358,7 +358,17 @@ class SettingsRepository {
   }
 
   Future<void> resetPlayerShortcuts() => updatePlayerSettings(
-      _playerSettings.copyWith(shortcuts: PlayerShortcutBindings.defaults));
+      _playerSettings.copyWith(
+        shortcuts: PlayerShortcutBindings.defaults,
+        bossKeyEnabled: true,
+        bossKey: const PlayerKeyBinding('keyQ', alt: true),
+      ));
+
+  Future<void> setBossKeyEnabled(bool enabled) =>
+      updatePlayerSettings(_playerSettings.copyWith(bossKeyEnabled: enabled));
+
+  Future<void> setBossKey(PlayerKeyBinding binding) =>
+      updatePlayerSettings(_playerSettings.copyWith(bossKey: binding));
 
   Future<void> _persistPlayer() {
     final snapshot = _playerSettings;

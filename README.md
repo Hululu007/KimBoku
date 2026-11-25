@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/jacurtwong/KimBoku/releases/latest"><img src="https://img.shields.io/badge/平台-Windows%2010%2F11%20x64-0078D4?logo=windows" alt="平台"></a>
-  <a href="https://github.com/jacurtwong/KimBoku/releases/latest"><img src="https://img.shields.io/badge/版本-1.4.10-2ea44f" alt="版本"></a>
+  <a href="https://github.com/jacurtwong/KimBoku/releases/latest"><img src="https://img.shields.io/badge/版本-1.4.11-2ea44f" alt="版本"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/许可证-GPL--3.0-blue" alt="许可证"></a>
   <a href="https://github.com/jacurtwong/KimBoku/releases/latest"><img src="https://img.shields.io/github/downloads/jacurtwong/KimBoku/total?color=blueviolet" alt="下载统计"></a>
 </p>

@@ -108,6 +108,12 @@ class PlayerSettings {
   /// 默认开启；若遇到误剪或特定源异常，可在设置页关闭。
   final bool adFilterEnabled;
 
+  /// 全局系统级「老板键」（按下自动暂停播放并完全隐藏窗口，再按一次唤出窗口并保持暂停）。
+  final bool bossKeyEnabled;
+
+  /// 全局系统级「老板键」快捷键绑定（默认 Alt + Q）。
+  final PlayerKeyBinding bossKey;
+
   /// 鼠标静止多久后隐藏光标（§55 口径：5 秒）。
   static const Duration cursorIdleDelay = Duration(seconds: 5);
 
@@ -139,6 +145,8 @@ class PlayerSettings {
     this.browserHeaders = true,
     this.autoDetectLiveDirectMode = true,
     this.adFilterEnabled = true,
+    this.bossKeyEnabled = true,
+    this.bossKey = const PlayerKeyBinding('keyQ', alt: true),
   });
 
   static const PlayerSettings defaults = PlayerSettings();
@@ -259,6 +267,9 @@ class PlayerSettings {
       browserHeaders: json['browserHeaders'] != false,
       autoDetectLiveDirectMode: json['autoDetectLiveDirectMode'] != false,
       adFilterEnabled: json['adFilterEnabled'] != false,
+      bossKeyEnabled: json['bossKeyEnabled'] != false,
+      bossKey: PlayerKeyBinding.fromJson(json['bossKey']) ??
+          const PlayerKeyBinding('keyQ', alt: true),
     );
   }
 
@@ -295,6 +306,8 @@ class PlayerSettings {
         'browserHeaders': browserHeaders,
         'autoDetectLiveDirectMode': autoDetectLiveDirectMode,
         'adFilterEnabled': adFilterEnabled,
+        'bossKeyEnabled': bossKeyEnabled,
+        'bossKey': bossKey.toJson(),
       };
 
   /// 画面缩放对应的 mpv 属性取值：比例模式强制对应比例，其余复位默认态。
@@ -352,6 +365,8 @@ class PlayerSettings {
     bool? browserHeaders,
     bool? autoDetectLiveDirectMode,
     bool? adFilterEnabled,
+    bool? bossKeyEnabled,
+    PlayerKeyBinding? bossKey,
   }) {
     return PlayerSettings(
       hwdec: hwdec ?? this.hwdec,
@@ -382,6 +397,8 @@ class PlayerSettings {
       autoDetectLiveDirectMode:
           autoDetectLiveDirectMode ?? this.autoDetectLiveDirectMode,
       adFilterEnabled: adFilterEnabled ?? this.adFilterEnabled,
+      bossKeyEnabled: bossKeyEnabled ?? this.bossKeyEnabled,
+      bossKey: bossKey ?? this.bossKey,
     );
   }
 
@@ -414,11 +431,13 @@ class PlayerSettings {
       other.autoHideCursor == autoHideCursor &&
       other.browserHeaders == browserHeaders &&
       other.autoDetectLiveDirectMode == autoDetectLiveDirectMode &&
-      other.adFilterEnabled == adFilterEnabled;
+      other.adFilterEnabled == adFilterEnabled &&
+      other.bossKeyEnabled == bossKeyEnabled &&
+      other.bossKey == bossKey;
 
   @override
   int get hashCode => Object.hashAll([hwdec, defaultVolume, defaultRate, audioChannels, audioDelayMs,
       toneMapping, scale, brightness, contrast, saturation, gamma, cacheSecs, hideWindowTitleBar,
       danmakuEnabled, danmaku, segmentsAutoApply, showMiniProgress, showResolution, autoLineSwitch, autoPlayNextEpisode, holdRate, shortcuts,
-      externalPlayer, autoHideCursor, browserHeaders, autoDetectLiveDirectMode, adFilterEnabled]);
+      externalPlayer, autoHideCursor, browserHeaders, autoDetectLiveDirectMode, adFilterEnabled, bossKeyEnabled, bossKey]);
 }

@@ -88,7 +88,7 @@ class PlayerKeyBinding {
         .join(' + ');
   }
 
-  static PlayerKeyBinding? _fromJson(Object? raw) {
+  static PlayerKeyBinding? fromJson(Object? raw) {
     if (raw is! Map || raw['key'] is! String) return null;
     for (final name in ['control', 'alt', 'shift']) {
       if (raw.containsKey(name) && raw[name] is! bool) return null;
@@ -250,7 +250,7 @@ class PlayerShortcutBindings {
         }
         keys = [];
         for (final value in values) {
-          final binding = PlayerKeyBinding._fromJson(value);
+          final binding = PlayerKeyBinding.fromJson(value);
           if (binding == null) return defaults;
           keys.add(binding);
         }

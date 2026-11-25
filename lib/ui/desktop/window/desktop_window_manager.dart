@@ -33,6 +33,10 @@ class DesktopWindowManager with WindowListener {
   /// 退出播放页时由播放器 `dispose` 复位。
   final ValueNotifier<bool> isImmersiveNotifier = ValueNotifier<bool>(false);
 
+  /// 老板键（全局热键）隐藏状态：true 期间窗口处于彻底隐藏状态，从桌面与任务栏移除。
+  final ValueNotifier<bool> isBossKeyHiddenNotifier =
+      ValueNotifier<bool>(false);
+
 
   /// PiP 小窗尺寸（16:9）。
   static const Size pipWindowSize = Size(400, 225);
@@ -302,6 +306,26 @@ class DesktopWindowManager with WindowListener {
     await windowManager.minimize();
   }
 
+  /// 切换老板键显隐状态：
+  /// - 显示状态下：调用 [onBeforeHide]（如暂停视频播放），然后完全隐藏主窗口并从任务栏移除；
+  /// - 隐藏状态下：重新显示并拉回前台焦点，保持之前状态（保持暂停）。
+  Future<void> toggleBossKey({VoidCallback? onBeforeHide}) async {
+    if (isBossKeyHiddenNotifier.value) {
+      await windowManager.show();
+      try {
+        if (await windowManager.isMinimized()) {
+          await windowManager.restore();
+        }
+      } catch (_) {}
+      await windowManager.focus();
+      isBossKeyHiddenNotifier.value = false;
+    } else {
+      onBeforeHide?.call();
+      await windowManager.hide();
+      isBossKeyHiddenNotifier.value = true;
+    }
+  }
+
   /// 关闭窗口
   Future<void> close() =>
       _closing ??= _close().catchError((Object error, StackTrace stack) {
@@ -371,8 +395,8 @@ class DesktopWindowManager with WindowListener {
 
   /// 防抖保存窗口几何参数至持久化配置，避免高频拖拽导致频繁磁盘 I/O
   void _schedulePersistWindowGeometry() {
-    // PiP 期间的小窗移动 / 缩放不入队落盘（关闭时由 _flush 用快照兜底）。
-    if (_closing != null || isPipNotifier.value) return;
+    // PiP 期间的小窗移动 / 缩放不入队落盘（关闭时由 _flush 用快照兜底）；老板键隐藏期间同理。
+    if (_closing != null || isPipNotifier.value || isBossKeyHiddenNotifier.value) return;
     _debounceSaveTimer?.cancel();
     _debounceSaveTimer = Timer(_debounceDuration, () {
       _flushPersistWindowGeometry();

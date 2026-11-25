@@ -45,6 +45,9 @@ bool FlutterWindow::OnCreate() {
   fullscreen_ = std::make_unique<WindowFullscreen>(GetHandle());
   fullscreen_channel_ = RegisterWindowFullscreenChannel(
       flutter_controller_->engine()->messenger(), fullscreen_.get());
+  boss_key_ = std::make_unique<BossKeyHandler>(GetHandle());
+  boss_key_channel_ = RegisterBossKeyChannel(
+      flutter_controller_->engine()->messenger(), boss_key_.get());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -68,6 +71,11 @@ void FlutterWindow::OnDestroy() {
   }
   process_job_channel_ = nullptr;
   fullscreen_channel_ = nullptr;
+  if (boss_key_) {
+    boss_key_->SetChannel(nullptr);
+  }
+  boss_key_channel_ = nullptr;
+  boss_key_.reset();
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
@@ -87,6 +95,12 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   }
 
   if (message == WM_TIMER && native_playback_ && native_playback_->HandleTimer(wparam)) return 0;
+
+  if (boss_key_) {
+    if (auto handled = boss_key_->HandleMessage(message, wparam, lparam)) {
+      return *handled;
+    }
+  }
 
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {

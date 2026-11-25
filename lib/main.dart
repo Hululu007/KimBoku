@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'core/app_info.dart';
+import 'core/boss_key/boss_key_service.dart';
 import 'core/companion/companion_playback_lease.dart';
 import 'core/companion/companion_process_manager.dart';
 import 'core/config/config_repository.dart';
@@ -90,9 +91,11 @@ Future<void> main() async {
       statusStream: playerEngine.statusStream,
       manager: companionManager,
     );
+    BossKeyService? bossKeyService;
     final windowManager = DesktopWindowManager(
       configRepository: configRepository,
       beforeClose: () async {
+        bossKeyService?.dispose();
         try {
           await playerEngine.stop().timeout(const Duration(milliseconds: 500));
         } catch (_) {
@@ -102,6 +105,12 @@ Future<void> main() async {
         await companionManager.shutdown();
       },
     );
+    bossKeyService = BossKeyService(
+      windowManager: windowManager,
+      playerEngine: playerEngine,
+      settingsRepository: settingsRepository,
+    );
+    unawaited(bossKeyService.initialize());
     // 首帧前按已保存主题给原生窗口底色，避免浅色主题启动时闪深色边
     final appearance = settingsRepository.appearancePreferences;
     final initialBrightness = switch (appearance.themeMode) {

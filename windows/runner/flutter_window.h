@@ -12,6 +12,7 @@
 
 #include "win32_window.h"
 #include "window_fullscreen.h"
+#include "boss_key_channel.h"
 
 // A window that does nothing but host a Flutter view.
 class FlutterWindow : public Win32Window {
@@ -47,6 +48,11 @@ class FlutterWindow : public Win32Window {
   std::unique_ptr<WindowFullscreen> fullscreen_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       fullscreen_channel_;
+
+  // 老板键（全局热键）处理与通道
+  std::unique_ptr<BossKeyHandler> boss_key_;
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
+      boss_key_channel_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_
