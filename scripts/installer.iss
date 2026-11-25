@@ -1,6 +1,6 @@
 ﻿; Script generated for XiugouTV Windows x64 Installer
 #ifndef AppVersion
-  #define AppVersion "1.4.11"
+  #define AppVersion "1.4.12"
 #endif
 #ifndef SourceDir
   #error SourceDir must be the clean application stage created by scripts/package_tree.ps1

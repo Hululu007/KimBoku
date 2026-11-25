@@ -987,7 +987,7 @@ class _ConfigSourcesPanelState extends State<ConfigSourcesPanel> {
     setState(() => _exporting = true);
     try {
       final picker = widget.pickExportPath ?? _defaultPickExportPath;
-      var path = await picker('xiugou-tv-config.json');
+      var path = await picker('kimboku-config.json');
       if (path == null || path.trim().isEmpty) return;
       if (!path.toLowerCase().endsWith('.json')) path = '$path.json';
       await _repo.exportCurrentConfig(path);
@@ -4418,7 +4418,7 @@ class _DataBackupCardState extends State<DataBackupCard> {
   String _suggestedName() {
     final now = DateTime.now();
     String two(int value) => value.toString().padLeft(2, '0');
-    return 'xiugou-tv-backup-${now.year}${two(now.month)}${two(now.day)}-'
+    return 'kimboku-backup-${now.year}${two(now.month)}${two(now.day)}-'
         '${two(now.hour)}${two(now.minute)}${two(now.second)}.json';
   }
 

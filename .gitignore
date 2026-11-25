@@ -183,6 +183,7 @@ $RECYCLE.BIN/
 /companion/phpruntime/
 !/tools/update-mirrors-worker/README.md
 /xiugou-tv-backup-*.json
+/kimboku-backup-*.json
 # /companion/libs/      —— 同上
 # /test/lib/*.jar        —— test/ 已不在仓库内
 

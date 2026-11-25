@@ -51,7 +51,8 @@ class DataBackupEntry {
 /// 只存文件原文，不二次 JSON 编码对象；这样能原样保留未知字段与格式，
 /// 避免「备份再恢复」造成语义漂移。
 class DataBackup {
-  static const String format = 'xiugou-tv-backup';
+  static const String format = 'kimboku-backup';
+  static const String legacyFormat = 'xiugou-tv-backup';
   static const int version = 1;
 
   final DateTime createdAt;
@@ -87,8 +88,9 @@ class DataBackup {
   String encode() => const JsonEncoder.withIndent('  ').convert(toJson());
 
   factory DataBackup.fromJson(Map<String, dynamic> json) {
-    if (json['format'] != format) {
-      throw const FormatException('不是 修狗TV 数据备份文件');
+    final fileFormat = json['format'];
+    if (fileFormat != format && fileFormat != legacyFormat) {
+      throw const FormatException('不是 KimBoKu 数据备份文件');
     }
     if (json['version'] != version) {
       throw const FormatException('备份格式版本不受支持');
