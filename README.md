@@ -130,7 +130,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
 
 ## 📜 鸣谢与生态开源
 
-- 本项目基于开源仓库 [qfw66/xiugou-tv](https://github.com/qfw66/xiugou-tv) 原版 v1.12.0 修改与演进，在此对其作者与贡献者表达诚挚感谢。
+- 本项目基于开源仓库 [qfw66/xiugou-tv](https://github.com/qfw66/xiugou-tv) 原版 v1.2.0 修改与演进，在此对其作者与贡献者表达诚挚感谢。
 - 本项目的播放内核深度依托于 [media_kit](https://github.com/media-kit/media-kit)（基于卓越的 libmpv 开源多媒体套件）。
 - 影视配置与插件兼容规范参考并吸纳了 FongMi（[FongMi/TV](https://github.com/FongMi/TV)）以及 TVBox / CatVod 开放社区的长期实践，特此致敬所有无私奉献的开源作者。
 - 更多第三方组件及其遵循的许可证说明，请详见安装目录下的 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。
