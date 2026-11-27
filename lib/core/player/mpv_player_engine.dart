@@ -7,6 +7,7 @@ import 'decode_diagnostics.dart';
 import 'embedded_playback.dart';
 import 'hls_ad_filter.dart';
 import 'hls_ad_proxy.dart';
+import 'hls_playlist_probe.dart';
 import 'live_stream_tuning.dart';
 import 'local_subtitle_files.dart';
 import 'models/player_settings.dart';
@@ -22,6 +23,7 @@ import 'player_settings_application.dart';
 import 'mpv_settings_target.dart';
 import 'seek_recovery_controller.dart';
 import '../danmaku/danmaku_api.dart';
+import '../net/http_client_factory.dart';
 
 part 'mpv_embedded_routing.dart';
 
@@ -873,15 +875,17 @@ class MpvPlayerEngine
       report(AdFilterOutcome.notHls, reason: '本地文件或非 http 地址');
       return fallback;
     }
-    final path = uri.path.toLowerCase();
-    if (!path.endsWith('.m3u8') && !path.endsWith('.m3u')) {
-      report(AdFilterOutcome.notHls, reason: '地址不以 .m3u8 / .m3u 结尾');
+    if (isKnownNonHlsExtension(uri)) {
+      report(AdFilterOutcome.notHls, reason: '已知非 HLS 容器或原始流扩展名');
       return fallback;
     }
-    // 配了系统代理时不动：mpv 只有全局 http-proxy，换成回环地址后分片会被
-    // 一起塞进代理（代理在别的机器上解析 127.0.0.1），等于把能播的源搞坏。
+    // 配了系统代理时不对远程地址剪辑：mpv 只有全局 http-proxy，换成回环地址后分片会被
+    // 一起塞进代理（代理在别的机器上解析 127.0.0.1），等于把能播的源搞坏；
+    // 但本机回环源（如 Spider 的 127.0.0.1:9978/proxy）本就不走系统代理，可以照常剪辑。
     final systemProxy = DanmakuApi.systemProxy();
-    if (systemProxy != null && systemProxy.isNotEmpty) {
+    if (!HttpClientFactory.isLoopbackHost(uri.host) &&
+        systemProxy != null &&
+        systemProxy.isNotEmpty) {
       report(AdFilterOutcome.systemProxy,
           reason: 'mpv 只有全局 http-proxy，本地清单会被代理转发');
       _recentLogs.add('[ad-filter] 已配置系统代理，跳过剪辑（本地列表会被代理转发）');

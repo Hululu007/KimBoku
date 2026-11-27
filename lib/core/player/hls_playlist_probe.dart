@@ -23,13 +23,21 @@ import 'models/player_state.dart';
 
 /// 单跳抓取预算（总预算由 [HlsPlaylistProbe] 统一截断）。
 class HlsFetchBudget {
-  const HlsFetchBudget({required this.maxBytes, required this.timeout});
+  const HlsFetchBudget({
+    required this.maxBytes,
+    required this.timeout,
+    this.sniffBytes,
+  });
 
   /// 单跳最多读取的字节数（超出部分丢弃，不做 Range 请求）。
   final int maxBytes;
 
   /// 单跳超时（已被总预算截断，不会超过剩余预算）。
   final Duration timeout;
+
+  /// 非 null 时执行前缀内容嗅探：若前 [sniffBytes] 字节既非 `mpegurl` MIME，
+  /// 又不含 `#EXTM3U` / `#EXT-X-`，立即中止后续读取避免下载非清单大文件。
+  final int? sniffBytes;
 }
 
 /// 抓取结果（纯数据；重定向后的 [uri] 是解析相对变体地址的基址）。
@@ -38,11 +46,15 @@ class HlsFetchResponse {
     required this.content,
     required this.uri,
     this.statusCode = 200,
+    this.contentType = '',
+    this.abortedBySniff = false,
   });
 
   final String content;
   final Uri uri;
   final int statusCode;
+  final String contentType;
+  final bool abortedBySniff;
 }
 
 /// 可注入的抓取实现（测试用 fake，生产用 [fetchHlsPlaylist]）。
@@ -206,6 +218,18 @@ const Set<String> _vodContainerExtensions = {
   'flv',
   'm4v',
   'avi',
+  'mp3',
+  'm4a',
+  'aac',
+  'flac',
+  'wav',
+};
+
+/// 明确的原始非清单流扩展名（按直播流直接起播，不做清单嗅探）。
+const Set<String> _liveRawStreamExtensions = {
+  'ts',
+  'mpg',
+  'mpeg',
 };
 
 /// 可探测的 HLS 清单扩展名。
@@ -217,6 +241,56 @@ String _pathExtension(Uri? uri) {
   final dot = path.lastIndexOf('.');
   if (dot <= slash || dot == path.length - 1) return '';
   return path.substring(dot + 1);
+}
+
+/// 扩展名是否明确属于非 HLS 容器或原始流（`.mp4/.flv/.mkv/.ts/.webm/.mp3/.m4a` 等）。
+bool isKnownNonHlsExtension(Uri? uri) {
+  final ext = _pathExtension(uri);
+  return _vodContainerExtensions.contains(ext) ||
+      _liveRawStreamExtensions.contains(ext);
+}
+
+/// 路径是否明确以 `.m3u8` / `.m3u` 结尾。
+bool isHlsPlaylistExtension(Uri? uri) =>
+    _hlsPlaylistExtensions.contains(_pathExtension(uri));
+
+const Set<String> _blockedProxyHeaders = {
+  'host',
+  'content-length',
+  'connection',
+  'keep-alive',
+  'transfer-encoding',
+  'te',
+  'trailer',
+  'upgrade',
+  'range',
+};
+
+final RegExp _validHeaderName = RegExp(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$");
+final RegExp _headerControlChars = RegExp(r'[\r\n\x00]');
+
+/// 清洗上游代理请求头：剔除 hop-by-hop / 危险头（`host`, `content-length`, `connection`,
+/// `keep-alive`, `transfer-encoding`, `te`, `trailer`, `upgrade`, `proxy-*`, `range`）
+/// 与 `\r`/`\n` CRLF 注入，透传其余合法自定义鉴权头（如 `Badci`、`User-Agent` 等）。
+Map<String, String> sanitizeProxyHeaders(Map<String, String> headers) {
+  if (headers.isEmpty) return const {};
+  final sanitized = <String, String>{};
+  for (final entry in headers.entries) {
+    final name = entry.key.trim();
+    final value = entry.value;
+    if (name.isEmpty) continue;
+    if (_headerControlChars.hasMatch(name) ||
+        _headerControlChars.hasMatch(value) ||
+        !_validHeaderName.hasMatch(name)) {
+      continue;
+    }
+    final lower = name.toLowerCase();
+    if (_blockedProxyHeaders.contains(lower) || lower.startsWith('proxy-')) {
+      continue;
+    }
+    sanitized[name] = value;
+  }
+  return sanitized;
 }
 
 /// URL 层的点播提示：`file://` 与明确的容器扩展名 → [PlaybackMode.vod]。
@@ -233,14 +307,14 @@ PlaybackMode? containerHintForUrl(String url) {
   return null;
 }
 
-/// 是否值得联网探测：仅 `http(s)` 且路径以 `.m3u8` / `.m3u` 结尾。
-///
-/// `.mp4` 等容器按扩展名直接点播；`.ts` / 无扩展名按直播（保持现状）。
-bool isHlsProbeCandidate(String url) {
+/// 是否值得联网探测：凡 `http(s)` 且非明确容器/原始流扩展名的地址均允许进入（含无后缀代理地址），
+/// 或显式传入 `forceHls: true`。对无 `.m3u8`/`.m3u` 后缀的地址在拉取时执行前 4KB 嗅探。
+bool isHlsProbeCandidate(String url, {bool forceHls = false}) {
   final uri = Uri.tryParse(url.trim());
   if (uri == null || uri.host.isEmpty) return false;
   if (uri.scheme != 'http' && uri.scheme != 'https') return false;
-  return _hlsPlaylistExtensions.contains(_pathExtension(uri));
+  if (forceHls) return true;
+  return !isKnownNonHlsExtension(uri);
 }
 
 // --- 纯解析 -----------------------------------------------------------------
@@ -297,10 +371,13 @@ HlsPlaylistSignals parseHlsSignals(String content, Uri base) {
     }
   }
 
+  // 按 BANDWIDTH 降序（优先最高码率）；缺失或 <=0 的码率排到最后。
   variants.sort((a, b) {
-    final left = a.bandwidth > 0 ? a.bandwidth : 1 << 62;
-    final right = b.bandwidth > 0 ? b.bandwidth : 1 << 62;
-    return left.compareTo(right);
+    final aHas = a.bandwidth > 0;
+    final bHas = b.bandwidth > 0;
+    if (aHas != bHas) return aHas ? -1 : 1;
+    if (!aHas) return 0;
+    return b.bandwidth.compareTo(a.bandwidth);
   });
 
   return HlsPlaylistSignals(
@@ -416,6 +493,7 @@ class HlsPlaylistProbe {
   Future<HlsProbeResult> probe(
     String url, {
     Map<String, String>? headers,
+    bool forceHls = false,
   }) async {
     final uri = Uri.tryParse(url.trim());
     if (uri == null || uri.host.isEmpty) {
@@ -436,8 +514,8 @@ class HlsPlaylistProbe {
       return const HlsProbeResult(
           mode: PlaybackMode.vod, reason: 'container');
     }
-    if (!isHlsProbeCandidate(url)) {
-      // 不是 .m3u8/.m3u：不联网，按现状直播（例如 .ts / 无扩展名）。
+    if (!isHlsProbeCandidate(url, forceHls: forceHls)) {
+      // 明确的原始非清单扩展名（例如 .ts）：不联网，按现状直播。
       return const HlsProbeResult(mode: PlaybackMode.live, reason: 'not-hls');
     }
 
@@ -461,29 +539,31 @@ class HlsPlaylistProbe {
     var requests = 0;
     int? lastStatus;
 
-    Future<HlsFetchResponse> fetchOne(Uri target) {
+    Future<HlsFetchResponse> fetchOne(Uri target, {int? sniffBytes}) {
       final remaining = deadline.difference(DateTime.now());
       if (remaining <= Duration.zero) throw TimeoutException('探测预算已用尽');
       requests++;
       final hopBudget = HlsFetchBudget(
         maxBytes: maxBytes,
         timeout: remaining < connectionTimeout ? remaining : connectionTimeout,
+        sniffBytes: sniffBytes,
       );
       return _fetch(target, requestHeaders, hopBudget).timeout(remaining);
     }
 
     try {
-      final root = await fetchOne(uri);
+      final needsSniff = !forceHls && !isHlsPlaylistExtension(uri);
+      final root = await fetchOne(uri, sniffBytes: needsSniff ? 4096 : null);
       lastStatus = root.statusCode;
-      if (!looksLikeHlsPlaylist(root.content)) {
+      if (root.abortedBySniff || !looksLikeHlsPlaylist(root.content)) {
         return _remember(
             cacheKey,
             HlsProbeResult(
               mode: PlaybackMode.live,
-              reason: 'probe-invalid-content',
+              reason: root.abortedBySniff ? 'not-hls' : 'probe-invalid-content',
               requests: requests,
               statusCode: lastStatus,
-              failed: true,
+              failed: !root.abortedBySniff,
             ));
       }
       var signals = parseHlsSignals(root.content, root.uri);
@@ -584,7 +664,7 @@ Future<HlsFetchResponse> fetchHlsPlaylist(
     final request = await client.getUrl(uri).timeout(budget.timeout);
     request.followRedirects = true;
     request.maxRedirects = 5;
-    headers.forEach(request.headers.set);
+    sanitizeProxyHeaders(headers).forEach(request.headers.set);
     final response = await request.close().timeout(budget.timeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       // 读完并丢弃响应体，避免连接滞留。
@@ -595,6 +675,12 @@ Future<HlsFetchResponse> fetchHlsPlaylist(
       }
       throw HlsProbeHttpException(response.statusCode);
     }
+    final mime = (response.headers.contentType?.mimeType ?? '').toLowerCase();
+    final isMpegUrlMime = mime.contains('mpegurl');
+    final sniffLimit = budget.sniffBytes;
+    var sniffPassed = sniffLimit == null || isMpegUrlMime;
+    var abortedBySniff = false;
+
     final bytes = BytesBuilder(copy: false);
     await for (final chunk in response.timeout(budget.timeout)) {
       final remain = budget.maxBytes - bytes.length;
@@ -604,6 +690,16 @@ Future<HlsFetchResponse> fetchHlsPlaylist(
       } else {
         bytes.add(chunk.sublist(0, remain));
       }
+      if (!sniffPassed && bytes.length >= sniffLimit!) {
+        final prefix = utf8
+            .decode(bytes.toBytes(), allowMalformed: true)
+            .replaceFirst('\uFEFF', '');
+        if (!looksLikeHlsPlaylist(prefix)) {
+          abortedBySniff = true;
+          break;
+        }
+        sniffPassed = true;
+      }
       if (bytes.length >= budget.maxBytes) break;
     }
     var resolved = uri;
@@ -611,11 +707,24 @@ Future<HlsFetchResponse> fetchHlsPlaylist(
       // RedirectInfo.location 是 Uri（与 live_text_loader 同样的逐跳解析）。
       resolved = resolved.resolveUri(redirect.location);
     }
+    if (abortedBySniff) {
+      return HlsFetchResponse(
+        content: '',
+        uri: resolved,
+        statusCode: response.statusCode,
+        contentType: mime,
+        abortedBySniff: true,
+      );
+    }
     final text = utf8
         .decode(bytes.takeBytes(), allowMalformed: true)
         .replaceFirst('\uFEFF', '');
     return HlsFetchResponse(
-        content: text, uri: resolved, statusCode: response.statusCode);
+      content: text,
+      uri: resolved,
+      statusCode: response.statusCode,
+      contentType: mime,
+    );
   } finally {
     client.close(force: true);
   }

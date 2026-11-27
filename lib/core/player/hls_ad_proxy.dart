@@ -66,10 +66,14 @@ class HlsAdFilterAttempt {
 class _Entry {
   _Entry.body(this.body, {required this.contentType})
       : source = null,
-        headers = const {};
+        headers = const {},
+        depth = 0;
 
-  _Entry.variant({required Uri this.source, required this.headers})
-      : body = null,
+  _Entry.variant({
+    required Uri this.source,
+    required this.headers,
+    this.depth = 0,
+  })  : body = null,
         contentType = 'application/vnd.apple.mpegurl';
 
   /// 已生成的播放列表正文；主列表 / 已剪辑的媒体列表在创建时就有值。
@@ -79,6 +83,7 @@ class _Entry {
   /// 变体地址（懒分析用）。
   final Uri? source;
   final Map<String, String> headers;
+  final int depth;
 
   final DateTime createdAt = DateTime.now();
 
@@ -97,6 +102,7 @@ class HlsAdFilterProxy {
 
   static const Duration cacheTtl = Duration(hours: 6);
   static const int maxEntries = 64;
+  static const int sniffPrefixBytes = 4096;
 
   /// 单跳预算：清单只有几十 KB，4 秒足够；**起播延迟上限**也由它决定。
   static const HlsFetchBudget fetchBudget = HlsFetchBudget(
@@ -122,8 +128,9 @@ class HlsAdFilterProxy {
   /// 不剪辑的原因写进 [HlsAdFilterAttempt.reason]，供调试面板展示。
   Future<HlsAdFilterAttempt> filter(
     String url,
-    Map<String, String> headers,
-  ) async {
+    Map<String, String> headers, {
+    bool forceHls = false,
+  }) async {
     final uri = Uri.tryParse(url);
     if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
       return const HlsAdFilterAttempt(AdFilterOutcome.notHls);
@@ -138,12 +145,24 @@ class HlsAdFilterProxy {
           reason: '目标地址就是本地代理本身');
     }
 
+    final cleanHeaders = sanitizeProxyHeaders(headers);
+    final needsSniff = !forceHls && !isHlsPlaylistExtension(uri);
+    final requestBudget = HlsFetchBudget(
+      maxBytes: fetchBudget.maxBytes,
+      timeout: fetchBudget.timeout,
+      sniffBytes: needsSniff ? sniffPrefixBytes : null,
+    );
+
     final HlsFetchResponse response;
     try {
-      response = await _fetch(uri, headers, fetchBudget);
+      response = await _fetch(uri, cleanHeaders, requestBudget);
     } catch (error) {
       return HlsAdFilterAttempt(AdFilterOutcome.unavailable,
           reason: '清单请求失败：$error');
+    }
+    if (response.abortedBySniff) {
+      return const HlsAdFilterAttempt(AdFilterOutcome.notHls,
+          reason: '响应内容非 HLS 清单');
     }
     final text = response.content;
     if (text.isEmpty) {
@@ -152,11 +171,15 @@ class HlsAdFilterProxy {
     }
 
     if (isMasterPlaylistText(text)) {
-      return _filterMaster(text, response.uri, headers);
+      return _filterMaster(text, response.uri, cleanHeaders);
+    }
+    if (!looksLikeHlsPlaylist(text)) {
+      return const HlsAdFilterAttempt(AdFilterOutcome.notHls,
+          reason: '响应内容非 HLS 清单（可能是网页或媒体流）');
     }
     if (!isMediaPlaylistText(text)) {
       return const HlsAdFilterAttempt(AdFilterOutcome.noAds,
-          reason: '返回的不是媒体播放列表（可能是网页或跳转页）');
+          reason: '返回的不是媒体播放列表（无分片）');
     }
 
     final absolute = absolutizePlaylist(text, response.uri);
@@ -201,6 +224,26 @@ class HlsAdFilterProxy {
     );
   }
 
+  String _rewriteChildMaster(
+    String text,
+    Uri base,
+    String localBase,
+    Map<String, String> headers, {
+    required int depth,
+  }) {
+    final cleanHeaders = sanitizeProxyHeaders(headers);
+    final rewritten = rewriteMasterVariants(text, base, (variant, index) {
+      final token = _newToken();
+      _entries[token] = _Entry.variant(
+        source: variant,
+        headers: cleanHeaders,
+        depth: depth,
+      );
+      return '$localBase/p/$token.m3u8';
+    });
+    return absolutizePlaylist(rewritten, base);
+  }
+
   Future<HlsAdFilterAttempt> _filterMaster(
     String text,
     Uri base,
@@ -217,15 +260,10 @@ class HlsAdFilterProxy {
           reason: '本地代理端口绑定失败');
     }
 
-    final master = rewriteMasterVariants(text, base, (variant, index) {
-      final token = _newToken();
-      _entries[token] = _Entry.variant(source: variant, headers: headers);
-      return '$localBase/p/$token.m3u8';
-    });
-
+    final master = _rewriteChildMaster(text, base, localBase, headers, depth: 0);
     final token = _newToken();
     _entries[token] = _Entry.body(
-      absolutizePlaylist(master, base),
+      master,
       contentType: 'application/vnd.apple.mpegurl',
     );
     _prune();
@@ -252,6 +290,21 @@ class HlsAdFilterProxy {
       return null;
     }
     final text = response.content;
+    if (isMasterPlaylistText(text) && entry.depth < 2) {
+      final localBase = await _ensureServer();
+      if (localBase != null) {
+        final master = _rewriteChildMaster(
+          text,
+          response.uri,
+          localBase,
+          entry.headers,
+          depth: entry.depth + 1,
+        );
+        _prune();
+        entry.body = master;
+        return master;
+      }
+    }
     if (!isMediaPlaylistText(text)) return null;
     final absolute = absolutizePlaylist(text, response.uri);
     String body = absolute;

@@ -44,6 +44,15 @@ class HttpClientFactory {
   /// 测试注入：直接指定解析器（null 恢复系统 DNS）。
   static set resolverForTesting(DohResolver? resolver) => _resolver = resolver;
 
+  /// 判断主机名是否本机回环地址（回环请求绝不绕系统代理）。
+  static bool isLoopbackHost(String host) {
+    final lower = host.toLowerCase();
+    return lower == 'localhost' ||
+        lower == '::1' ||
+        lower.startsWith('127.') ||
+        lower == '0.0.0.0';
+  }
+
   /// 把「返回代理地址的函数」转成 [HttpClient.findProxy] 用的 PAC 串：
   /// 有代理时优先代理、失败直连；无代理直连。
   static String pacFor(String? proxy) =>
@@ -64,7 +73,10 @@ class HttpClientFactory {
     if (connectionTimeout != null) client.connectionTimeout = connectionTimeout;
     if (idleTimeout != null) client.idleTimeout = idleTimeout;
     if (userAgent != null) client.userAgent = userAgent;
-    if (proxy != null) client.findProxy = (_) => pacFor(proxy());
+    if (proxy != null) {
+      client.findProxy = (uri) =>
+          isLoopbackHost(uri.host) ? 'DIRECT' : pacFor(proxy());
+    }
     client.connectionFactory = (uri, proxyHost, proxyPort) =>
         _connect(uri, proxyHost, proxyPort, context);
     return client;

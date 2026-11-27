@@ -1,40 +1,39 @@
 /// HLS 播放列表「插播广告」识别与剪辑（纯函数，可单测）。
 ///
-/// 算法移植自同维护者的另一款客户端 KimBoxPC（`server.js` 的
-/// `analyzeAdRanges` / `buildCutPlaylist`），两边的判定阈值必须保持一致，
-/// 否则同一部片在两个客户端上的表现会不一样。
-///
 /// 识别思路：插播广告的典型形态是
 /// `正片块 | #EXT-X-DISCONTINUITY | 短广告块(5~90s / ≤30 片) | #EXT-X-DISCONTINUITY | 正片块`。
-/// 因此按 discontinuity 切块，挑出「被两侧长正片夹住」的短块；片头 / 片尾广告没有两侧
-/// 长正片，只在「分片数与时长特征」和已确认的插播广告完全一致时才认定，
-/// 避免把片尾字幕、下集预告当广告切掉。
-///
-/// 三条硬性护栏（都来自实测，不要放宽）：
-/// 1. 命中 >6 段、或广告总时长超过全片 5% → 大概率是「整集被切片」的正常封装，整体放弃；
-/// 2. 含 `#EXT-X-BYTERANGE` 的列表不处理（分片偏移绑在同一个文件上，删块必坏）；
-/// 3. 没有 `#EXT-X-ENDLIST` 的列表视为直播，不处理。
+/// 结合以下多阶段规则覆盖真实采集源与多断流场景：
+/// 1. 基于 `segments > 0` 的非空块视图进行邻接与边缘判断，避免头部/尾部空 `#EXT-X-DISCONTINUITY` 干扰；
+/// 2. 精确重复分片 URI 序列检测：识别多断流正片内的隐蔽重复广告，干净多断流 0 误杀；
+/// 3. Pass 1（紧致流短边放宽 + 两侧目录前缀隔离）；
+/// 4. 动态防过杀阈值：最大段数随片长浮动 `clamp(ceil(totalDur / 300), 6, 30)`，
+///    短片（< 600s）占比阈值放宽到 15%（常规 6%），精确重复 URI 豁免数量上限；
+/// 5. Pass 2（基于已确认广告的签名/目录/URI/精确小数时长延伸与片尾交替创意识别）；
+/// 6. 剪辑时严格仅保留列表级全局头标签，跳过空断流块；
+/// 7. 硬性护栏：含 `#EXT-X-BYTERANGE` 或无 `#EXT-X-ENDLIST` 的直播流不处理。
 library;
 
 import 'dart:math' as math;
 
-/// 单块最多几家分片仍可能是广告（整集切片通常几十到几百片）。
+/// 单块最多几片仍可能是广告（整集切片通常几十到几百片）。
 const int kAdMaxSegments = 30;
 
 /// 单块时长区间（秒）：短于 5 秒更像切片噪声，长于 90 秒不像贴片广告。
 const double kAdMinDuration = 5;
 const double kAdMaxDuration = 90;
 
-/// 全片最多允许命中的广告块数；超过即判定为「整集切片」而放弃。
-const int kAdMaxChunks = 6;
-
-/// 广告总时长占全片的比例上限；超过即放弃。
-const double kAdMaxTimeRatio = 0.05;
-
 /// 剪辑时的二次护栏：只删「仍然像广告」的块（比识别条件略宽），宁可少删不误删。
 const double kAdCutMinDuration = 5;
 const double kAdCutMaxDuration = 120;
 const int kAdCutMaxSegments = 40;
+
+/// 第 0 块整块被删除时，仅允许保留的播放列表全局头标签。
+final RegExp _playlistGlobalHeaderPattern = RegExp(
+  r'^#(?:EXTM3U|EXT-X-VERSION|EXT-X-TARGETDURATION|EXT-X-PLAYLIST-TYPE|'
+  r'EXT-X-MEDIA-SEQUENCE|EXT-X-DISCONTINUITY-SEQUENCE|'
+  r'EXT-X-INDEPENDENT-SEGMENTS|EXT-X-ALLOW-CACHE)(?=$|:)',
+  caseSensitive: false,
+);
 
 /// 广告块判定后是否被识别为片头 / 片尾。
 enum HlsAdPlacement { middle, head, tail }
@@ -188,35 +187,97 @@ List<({int start, int end})> splitAdBlockRanges(String text) {
   return blocks;
 }
 
-({double duration, int segments}) _blockInfo(List<String> lines) {
-  var duration = 0.0;
-  var segments = 0;
-  for (final raw in lines) {
-    final line = raw.trim();
-    if (!line.startsWith('#EXTINF')) continue;
-    // #EXTINF:<时长>,[标题]；标题里可能有冒号，只取第一个冒号到第一个逗号。
-    final colon = line.indexOf(':');
-    if (colon < 0) continue;
-    var value = line.substring(colon + 1);
-    final comma = value.indexOf(',');
-    if (comma >= 0) value = value.substring(0, comma);
-    duration += double.tryParse(value.trim()) ?? 0;
-    segments++;
-  }
-  return (duration: duration, segments: segments);
+class _ChunkInfo {
+  const _ChunkInfo({
+    required this.duration,
+    required this.segments,
+    required this.uris,
+    required this.uriKey,
+    required this.dirSig,
+  });
+
+  final double duration;
+  final int segments;
+  final List<String> uris;
+  final String uriKey;
+  final String dirSig;
 }
 
-bool _isAdShape(({double duration, int segments}) info) =>
+String _uriDirSig(String rawUri) {
+  var clean = rawUri.trim();
+  if (clean.isEmpty) return '';
+  final q = clean.indexOf('?');
+  if (q >= 0) clean = clean.substring(0, q);
+  final hash = clean.indexOf('#');
+  if (hash >= 0) clean = clean.substring(0, hash);
+  final uri = Uri.tryParse(clean);
+  if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+    final path = uri.path;
+    final slash = path.lastIndexOf('/');
+    if (slash < 0) return uri.host.toLowerCase();
+    return '${uri.host.toLowerCase()}${path.substring(0, slash + 1)}';
+  }
+  final slash = clean.lastIndexOf('/');
+  if (slash < 0) return '';
+  return clean.substring(0, slash + 1);
+}
+
+_ChunkInfo _blockInfo(List<String> lines) {
+  var duration = 0.0;
+  var segments = 0;
+  final uris = <String>[];
+  String? singleDir;
+  var mixedDir = false;
+
+  for (final raw in lines) {
+    final line = raw.trim();
+    if (line.isEmpty) continue;
+    if (line.startsWith('#')) {
+      if (!line.startsWith('#EXTINF')) continue;
+      // #EXTINF:<时长>,[标题]；标题里可能有冒号，只取第一个冒号到第一个逗号。
+      final colon = line.indexOf(':');
+      if (colon < 0) continue;
+      var value = line.substring(colon + 1);
+      final comma = value.indexOf(',');
+      if (comma >= 0) value = value.substring(0, comma);
+      duration += double.tryParse(value.trim()) ?? 0;
+      segments++;
+      continue;
+    }
+    uris.add(line);
+    if (!mixedDir) {
+      final dir = _uriDirSig(line);
+      if (dir.isEmpty) {
+        if (singleDir != null && singleDir.isNotEmpty) mixedDir = true;
+        singleDir ??= '';
+      } else if (singleDir == null) {
+        singleDir = dir;
+      } else if (singleDir != dir) {
+        mixedDir = true;
+      }
+    }
+  }
+
+  return _ChunkInfo(
+    duration: duration,
+    segments: segments,
+    uris: uris,
+    uriKey: uris.isEmpty ? '' : uris.join('|'),
+    dirSig: mixedDir ? '' : (singleDir ?? ''),
+  );
+}
+
+bool _isAdShape(_ChunkInfo info) =>
     info.segments >= 1 &&
     info.segments <= kAdMaxSegments &&
     info.duration >= kAdMinDuration &&
     info.duration <= kAdMaxDuration;
 
-String _signature(({double duration, int segments}) info) =>
+String _signature(_ChunkInfo info) =>
     '${info.segments}:${info.duration.round()}';
 
 List<HlsAdBlock> _blockList(
-  List<({double duration, int segments})> infos,
+  List<_ChunkInfo> infos,
   Map<int, HlsAdPlacement> adMap,
 ) =>
     List<HlsAdBlock>.generate(
@@ -236,8 +297,15 @@ HlsAdAnalysis analyzeAdBlocks(String text) {
   final infos = blocks.map(_blockInfo).toList(growable: false);
   final totalDuration = infos.fold<double>(0, (sum, info) => sum + info.duration);
 
-  // 不足 3 块不可能存在「夹在正片中间」的插播；但片长照常返回（面板要显示）。
-  if (blocks.length < 3) {
+  // 忽略 #EXTM3U 头后或末尾空 #EXT-X-DISCONTINUITY 切出的 0 分片空块，
+  // 所有邻接、边缘与断流计数都基于非空块视图，同时映射回原 blocks 下标。
+  final nonEmpty = <int>[
+    for (var i = 0; i < infos.length; i++)
+      if (infos[i].segments > 0) i,
+  ];
+
+  // 不足 3 个非空块不可能存在「夹在正片中间」的插播；但片长照常返回（面板要显示）。
+  if (nonEmpty.length < 3) {
     return HlsAdAnalysis(
       blocks: _blockList(infos, const {}),
       cuts: const [],
@@ -248,22 +316,79 @@ HlsAdAnalysis analyzeAdBlocks(String text) {
     );
   }
 
-  final picked = <int>[];
-  for (var i = 1; i < blocks.length - 1; i++) {
-    if (!_isAdShape(infos[i])) continue;
-    // 相邻两块不重复命中：一组广告常被拆成两个短块。
-    if (picked.contains(i - 1)) continue;
-    final need = math.max(180.0, infos[i].duration * 3);
-    final left = infos[i - 1];
-    final right = infos[i + 1];
-    if (left.segments <= 0 || left.duration < need) continue;
-    if (right.segments <= 0 || right.duration < need) continue;
-    picked.add(i);
+  // 精确重复分片 URI 序列检测：识别多断流正片（如 16~319 块）里的隐藏重复插播，
+  // 同时对无重复分片的干净多断流流实现 0 误杀。
+  final uriCounts = <String, int>{};
+  for (final idx in nonEmpty) {
+    final info = infos[idx];
+    if (_isAdShape(info) && info.uriKey.isNotEmpty) {
+      uriCounts[info.uriKey] = (uriCounts[info.uriKey] ?? 0) + 1;
+    }
+  }
+  final dupIndices = <int>{};
+  var dupDuration = 0.0;
+  for (final idx in nonEmpty) {
+    final info = infos[idx];
+    if (_isAdShape(info) && (uriCounts[info.uriKey] ?? 0) >= 2) {
+      dupIndices.add(idx);
+      dupDuration += info.duration;
+    }
+  }
+  if (dupIndices.isNotEmpty && dupDuration > totalDuration * 0.25) {
+    dupIndices.clear();
+    dupDuration = 0.0;
   }
 
+  // Pass 1：紧致流（<= 30 块）单边短正片放宽 + 全尺寸目录前缀隔离。
+  final picked = <int>{...dupIndices};
+  final compact = nonEmpty.length <= 30;
+  for (var pos = 1; pos < nonEmpty.length - 1; pos++) {
+    final idx = nonEmpty[pos];
+    if (picked.contains(idx)) continue;
+    final cur = infos[idx];
+    if (!_isAdShape(cur)) continue;
+    final prevIdx = nonEmpty[pos - 1];
+    final nextIdx = nonEmpty[pos + 1];
+    // 相邻两块不重复命中（除非是已由精确重复 URI 确认的广告）。
+    if (picked.contains(prevIdx) && !dupIndices.contains(prevIdx)) continue;
+
+    final left = infos[prevIdx];
+    final right = infos[nextIdx];
+    final needLong = math.max(180.0, cur.duration * 3);
+    final needShort = math.max(45.0, cur.duration * 2);
+
+    final bothLong = left.duration >= needLong && right.duration >= needLong;
+    final compactShortSide = compact &&
+        ((left.duration >= needLong && right.duration >= needShort) ||
+            (right.duration >= needLong && left.duration >= needShort));
+    final dirIsolated = left.dirSig.isNotEmpty &&
+        left.dirSig == right.dirSig &&
+        cur.dirSig.isNotEmpty &&
+        cur.dirSig != left.dirSig &&
+        math.max(left.duration, right.duration) >= needLong;
+
+    if (bothLong || compactShortSide || dirIsolated) {
+      picked.add(idx);
+    }
+  }
+
+  // 动态防过杀阈值：
+  // - 最大允许段数按总时长浮动，每 5 分钟至多 1 段，范围 [6, 30]；
+  // - 占比阈值短片（< 600s）放宽至 15%，常规 6%；
+  // - 存在精确重复 URI 广告时豁免数量上限，保留 25% 总时长安全线。
+  final maxPicked = (totalDuration / 300).ceil().clamp(6, 30);
+  final maxTimeRatio = totalDuration < 600 ? 0.15 : 0.06;
   final adDuration = picked.fold<double>(0, (sum, i) => sum + infos[i].duration);
-  if (picked.length > kAdMaxChunks || adDuration > totalDuration * kAdMaxTimeRatio) {
-    // 命中太多或占比太高：更像「整集被切片」，宁可不剪。
+  final hasExactDupes = dupIndices.isNotEmpty;
+  final nonDupCount = picked.length - dupIndices.length;
+
+  final exceededCount =
+      hasExactDupes ? nonDupCount > maxPicked : picked.length > maxPicked;
+  final exceededRatio = hasExactDupes
+      ? adDuration > totalDuration * 0.25
+      : adDuration > totalDuration * maxTimeRatio;
+
+  if (exceededCount || exceededRatio) {
     return HlsAdAnalysis(
       blocks: _blockList(infos, const {}),
       cuts: const [],
@@ -274,33 +399,129 @@ HlsAdAnalysis analyzeAdBlocks(String text) {
     );
   }
 
-  // 先把「中间插播 + 片头 / 片尾」的广告集合定下来，再算时间轴位置。
-  final adMap = <int, HlsAdPlacement>{
-    for (final index in picked) index: HlsAdPlacement.middle,
-  };
-
-  // 片头 / 片尾：只有「分片数 + 时长」与已确认的插播广告完全一致才认定。
-  final adSignatures = picked.map((i) => _signature(infos[i])).toSet();
-  var edgeAds = 0;
-  if (blocks.length >= 2 && adSignatures.isNotEmpty) {
-    final last = blocks.length - 1;
-    if (_isAdShape(infos[0]) &&
-        adSignatures.contains(_signature(infos[0])) &&
-        infos[1].duration >= math.max(180.0, infos[0].duration * 3)) {
-      adMap[0] = HlsAdPlacement.head;
-      edgeAds++;
-    }
-    if (_isAdShape(infos[last]) &&
-        adSignatures.contains(_signature(infos[last])) &&
-        infos[last - 1].duration >= math.max(180.0, infos[last].duration * 3)) {
-      adMap[last] = HlsAdPlacement.tail;
-      edgeAds++;
+  final adMap = <int, HlsAdPlacement>{};
+  for (final idx in picked) {
+    if (idx == nonEmpty.first) {
+      adMap[idx] = HlsAdPlacement.head;
+    } else if (idx == nonEmpty.last) {
+      adMap[idx] = HlsAdPlacement.tail;
+    } else {
+      adMap[idx] = HlsAdPlacement.middle;
     }
   }
 
+  // Pass 2：签名 / 目录 / URI / 精确小数时长扩展 + 片尾交替创意物料识别。
+  if (picked.isNotEmpty) {
+    final adSigs = {for (final i in picked) _signature(infos[i])};
+    final adDirs = {
+      for (final i in picked)
+        if (infos[i].dirSig.isNotEmpty) infos[i].dirSig,
+    };
+    final adUriKeys = {
+      for (final i in picked)
+        if (infos[i].uriKey.isNotEmpty) infos[i].uriKey,
+    };
+    final adExactDurs = [for (final i in picked) infos[i].duration];
+
+    bool matchesAd(_ChunkInfo info, {required bool allowExactDur}) =>
+        adSigs.contains(_signature(info)) ||
+        (info.dirSig.isNotEmpty && adDirs.contains(info.dirSig)) ||
+        (info.uriKey.isNotEmpty && adUriKeys.contains(info.uriKey)) ||
+        (allowExactDur &&
+            adExactDurs.any((d) => (d - info.duration).abs() <= 0.15));
+
+    // Pass 2.1 非边缘块扩展：命中特征且任意一侧邻块为长正片（或命中路径特征）。
+    for (var pos = 1; pos < nonEmpty.length - 1; pos++) {
+      final idx = nonEmpty[pos];
+      if (adMap.containsKey(idx)) continue;
+      final cur = infos[idx];
+      if (!_isAdShape(cur)) continue;
+      if (!matchesAd(cur, allowExactDur: compact)) continue;
+
+      final leftIdx = nonEmpty[pos - 1];
+      final rightIdx = nonEmpty[pos + 1];
+      final left = infos[leftIdx];
+      final right = infos[rightIdx];
+      final needLong = math.max(180.0, cur.duration * 3);
+      final oneSideLong =
+          (!adMap.containsKey(leftIdx) && left.duration >= needLong) ||
+          (!adMap.containsKey(rightIdx) && right.duration >= needLong);
+      final pathMatched =
+          (cur.uriKey.isNotEmpty && adUriKeys.contains(cur.uriKey)) ||
+          (cur.dirSig.isNotEmpty && adDirs.contains(cur.dirSig));
+      if (oneSideLong || pathMatched) {
+        adMap[idx] = HlsAdPlacement.middle;
+        adSigs.add(_signature(cur));
+        if (cur.dirSig.isNotEmpty) adDirs.add(cur.dirSig);
+        if (cur.uriKey.isNotEmpty) adUriKeys.add(cur.uriKey);
+        adExactDurs.add(cur.duration);
+      }
+    }
+
+    // Pass 2.2 边缘块（片头 / 片尾）扩展。
+    final headIdx = nonEmpty.first;
+    final headNextIdx = nonEmpty[1];
+    if (!adMap.containsKey(headIdx) && _isAdShape(infos[headIdx])) {
+      final cur = infos[headIdx];
+      final adj = infos[headNextIdx];
+      final adjOk = !adMap.containsKey(headNextIdx) &&
+          adj.duration >= math.max(45.0, cur.duration * 2);
+      final pathOrExactMatch =
+          (cur.uriKey.isNotEmpty && adUriKeys.contains(cur.uriKey)) ||
+          (cur.dirSig.isNotEmpty && adDirs.contains(cur.dirSig)) ||
+          (compact && adExactDurs.any((d) => (d - cur.duration).abs() <= 0.15));
+      if (matchesAd(cur, allowExactDur: compact) && (adjOk || pathOrExactMatch)) {
+        adMap[headIdx] = HlsAdPlacement.head;
+      }
+    }
+
+    final tailIdx = nonEmpty.last;
+    final tailPrevIdx = nonEmpty[nonEmpty.length - 2];
+    if (!adMap.containsKey(tailIdx) && _isAdShape(infos[tailIdx])) {
+      final cur = infos[tailIdx];
+      final adj = infos[tailPrevIdx];
+      final adjOk = !adMap.containsKey(tailPrevIdx) &&
+          adj.duration >= math.max(45.0, cur.duration * 2);
+      final pathOrExactMatch =
+          (cur.uriKey.isNotEmpty && adUriKeys.contains(cur.uriKey)) ||
+          (cur.dirSig.isNotEmpty && adDirs.contains(cur.dirSig)) ||
+          (compact && adExactDurs.any((d) => (d - cur.duration).abs() <= 0.15));
+      final alternatingTail = nonEmpty.length <= 24 &&
+          !adMap.containsKey(tailPrevIdx) &&
+          adj.duration >= 300.0 &&
+          cur.duration >= 10.0 &&
+          cur.duration <= 35.0 &&
+          cur.segments <= 12 &&
+          adExactDurs.any((d) => (cur.duration - d).abs() <= 5.0);
+
+      if ((matchesAd(cur, allowExactDur: compact) && (adjOk || pathOrExactMatch)) ||
+          alternatingTail) {
+        adMap[tailIdx] = HlsAdPlacement.tail;
+      }
+    }
+
+    // 二次检验 Pass 2 扩展后的总广告时长占比，确保整体安全上线不被突破。
+    final finalAdDuration =
+        adMap.keys.fold<double>(0, (sum, i) => sum + infos[i].duration);
+    if (finalAdDuration >
+        totalDuration * (hasExactDupes ? 0.25 : maxTimeRatio)) {
+      return HlsAdAnalysis(
+        blocks: _blockList(infos, const {}),
+        cuts: const [],
+        duration: totalDuration,
+        mainDuration: totalDuration,
+        edgeAds: 0,
+        rejected: true,
+      );
+    }
+  }
+
+  final edgeAds = adMap.values
+      .where((p) => p == HlsAdPlacement.head || p == HlsAdPlacement.tail)
+      .length;
+
   // 正片分片在源视频里是连续编码的（PTS 从 0 递增，不含插播时长），
   // 所以广告在「原始时间轴」上的位置 = 它前面所有正片块时长之和。
-  // 这里用**最终**广告集合累加，片头广告也要排除，否则后面的位置整体前移一段。
   final blockStarts = List<double>.filled(blocks.length, 0);
   var dramaAccumulator = 0.0;
   for (var i = 0; i < blocks.length; i++) {
@@ -332,8 +553,6 @@ HlsAdAnalysis analyzeAdBlocks(String text) {
 ///
 /// 拼接处保留一个 `#EXT-X-DISCONTINUITY`：分片是从不同时间点切开的，
 /// 没有它播放器会按原 PTS 衔接而出现跳帧 / 时间轴错乱。
-/// ffmpeg 的 hls 解复用器会把跨越 discontinuity 的时间戳归一化，
-/// 所以播放器看到的时间轴是**剪后**的连续时长，进度条与续播点都据此记录。
 ///
 /// ⚠️ 切块方式必须与 [analyzeAdBlocks] 完全一致（表头留在第 0 块），
 /// 否则 `analysis.blocks` 的广告标记会整体错位，把正片当广告删掉。
@@ -357,12 +576,20 @@ HlsCutPlaylist buildCutPlaylist(String text, HlsAdAnalysis analysis) {
   var removed = 0.0;
   var kept = 0;
 
+  void appendPlaylistHeaders(int startLine, int endLine) {
+    for (var i = startLine; i < endLine; i++) {
+      final trimmed = lines[i].trim();
+      if (trimmed.startsWith('#EXTINF')) break;
+      if (_playlistGlobalHeaderPattern.hasMatch(trimmed)) {
+        out.add(lines[i]);
+      }
+    }
+  }
+
   for (var index = 0; index < ranges.length; index++) {
     final range = ranges[index];
-    var duration = 0.0;
-    for (var i = range.start; i < range.end; i++) {
-      duration += _blockInfo(<String>[lines[i]]).duration;
-    }
+    final info = _blockInfo(lines.sublist(range.start, range.end));
+    final duration = info.duration;
     final start = cursor;
     cursor += duration;
 
@@ -374,12 +601,18 @@ HlsCutPlaylist buildCutPlaylist(String text, HlsAdAnalysis analysis) {
         segments: analysis.blocks[index].segments,
       ));
       removed += duration;
-      // 第 0 块被整体删掉时，表头（#EXTM3U / 版本 / TARGETDURATION…）仍要保留。
+      // 第 0 块被整体删掉时，仅保留列表级全局头标签，绝不把广告块的 KEY/MAP 保留进输出。
       if (index == 0) {
-        for (var i = range.start; i < range.end; i++) {
-          if (lines[i].trim().startsWith('#EXTINF')) break;
-          out.add(lines[i]);
-        }
+        appendPlaylistHeaders(range.start, range.end);
+      }
+      continue;
+    }
+
+    // 跳过 0 分片空断流块（如头部/尾部紧跟的空 #EXT-X-DISCONTINUITY）：
+    // 第 0 块若为空则只保留全局头标签且不计数，避免首尾产生多余断流标签。
+    if (info.segments <= 0) {
+      if (index == 0) {
+        appendPlaylistHeaders(range.start, range.end);
       }
       continue;
     }
